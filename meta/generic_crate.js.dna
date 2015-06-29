@@ -18,28 +18,34 @@ var version = $(this).attr("version");
 .name = "@{name}"
 .version = "@{version}"
 .authors = [
-$("authors authors",this).each(function(){
+var authors = [];
+$("authors author", this).each(function(){
 var name = $(this).attr("name");
 var  email = $(this).attr("email");
-./"@{name} <@{email}>", 
+authors.push([name,email]);
 });
+./!separate(",")
+for (var i = 0; i<authors.length; i++) {
+./+"@{authors[i][0]} <@{authors[i][1]}>" 
+}
 });
 ./+]
 
 //Dependencies
+.
 .[dependencies]
 var external_crate_names = [];
 $("dependencies dependency").each(function(){
     var name = $(this).attr("name");
     var version = $(this).attr("version");
 .@{name} = "@{version}"
-dep_external_crate_names.push(name);
+external_crate_names.push(name);
 });
 
 function generate_external_crate_prelude() {
 external_crate_names.forEach(function(each){
-.extern crate @{name}
-}
+.extern crate @{each};
+});
 }
 
 
