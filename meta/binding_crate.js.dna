@@ -1,0 +1,136 @@
+/*
+You need to create a new binding crate and then execute the generate function from the main dna file.
+*/
+function binding_crate() {
+ this.data_types;
+ this.extern;
+ this.objects;
+ this.object_uses;
+ this.custom_code;
+this.generate = function() {
+
+var data_types = this.data_types;
+var extern = this.extern;
+var objects = this.objects;
+var object_uses = this.object_uses;
+var custom_code = this.custom_code;
+
+
+//Open the binding xml file.
+var xml_file = fs.readFileSync("./binding.xml", {
+    encoding: "utf-8"
+});
+var $ = cheerio.load(xml_file, {
+    xmlMode: true
+});
+
+//Define the output
+./!output("../src/lib.rs")
+
+var language = $("binding").attr("language");
+
+generate_external_crate_prelude();
+
+./*The data types that are to be used by the extern functions. */
+.
+if(data_types!=undefined){
+data_types();
+}
+
+$("binding external_libraries library").each(function(){
+
+var lib_name = $(this).attr("name");
+var link_name = $(this).attr("link");
+if(link_name != undefined){
+.
+.#[link(name = "@{link_name}")]
+}
+.extern {
+.
+    extern[lib_name]();
+.}
+});
+
+if(object_uses !=undefined) {
+    object_uses();
+}
+
+if (language = "c") {
+    if($("binding objects object[need_malloc='true']").length) {
+.use libc::{free,malloc};
+.
+    }
+}
+
+$("binding objects object").each(function(){
+        var name = $(this).attr("name");
+        var object = objects[name];
+    if (language = "c") {
+        var c_name = $(this).attr("c_name");
+        var opaque = ($(this).attr("opaque") == "true");
+        var need_malloc = ($(this).attr("need_malloc") == "true");
+        var need_dealloc = ($(this).attr("need_dealloc") == "true");
+        var nlifetimes = $(this).attr("nlifetimes");
+
+        if(opaque) {
+.struct @{name} {
+.    @{c_name}: *mut @{c_name}_t
+.}
+        } else {
+            object.struct();
+        }
+.
+.impl
+if(nlifetimes>0){
+./+<
+    var alphabet = ['a','b','c','d','e','f','g','h','i','g','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
+./+'
+./!separate(",'")
+    for(var i =0; i<nlifetimes; i++){
+./+@{alphabet[i]}
+    }
+./+>
+}
+./+ @{name} {
+        if(need_malloc) {
+.    fn new(
+if("fn_new_args" in object) {
+./!separate(",");
+    for(var i=0; i<object.fn_new_args.length; i++){
+./+@{object.fn_new_args[i]}
+    }
+}
+./+) -> Result<@{name},String> {
+.        unsafe {
+.            let nself = @{name} { @{c_name} : malloc(@{object.malloc_size()}) as *mut @{c_name}_t };
+        object.fn_new();
+.        }
+.    }
+        }
+        if("fn_other" in object){
+            object.fn_other();
+        }
+.}
+
+        if(need_malloc ||need_dealloc){
+.impl Drop for @{name} {
+.
+.    fn drop(&mut self) {
+.        unsafe {
+        if(need_dealloc) {      
+            object.fn_drop(); 
+        }
+        if(need_malloc) {
+.        free(self.@{c_name} as *mut c_void);
+        }
+.        }
+.    }
+.}
+        }  
+        }
+    });
+if(custom_code !=undefined) {
+    custom_code();
+}
+}
+}

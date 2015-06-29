@@ -1,0 +1,49 @@
+//Dependencies
+var fs = require('fs');
+var cheerio = require('cheerio');
+
+//Open main project xml.
+var xml_file = fs.readFileSync("./crate.xml", {
+    encoding: "utf-8"
+});
+var $ = cheerio.load(xml_file, {
+    xmlMode: true
+});
+
+./!output("../Cargo.toml")
+.[package]
+$("info").each(function(){
+var name = $(this).attr("name");
+var version = $(this).attr("version");
+.name = "@{name}"
+.version = "@{version}"
+.authors = [
+$("authors authors",this).each(function(){
+var name = $(this).attr("name");
+var  email = $(this).attr("email");
+./"@{name} <@{email}>", 
+});
+});
+./+]
+
+//Dependencies
+.[dependencies]
+var external_crate_names = [];
+$("dependencies dependency").each(function(){
+    var name = $(this).attr("name");
+    var version = $(this).attr("version");
+.@{name} = "@{version}"
+dep_external_crate_names.push(name);
+});
+
+function generate_external_crate_prelude() {
+external_crate_names.forEach(function(each){
+.extern crate @{name}
+}
+}
+
+
+
+//Check type of Crate
+var type_of_crate =$("crate").attr("type");
+

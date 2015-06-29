@@ -1,0 +1,22 @@
+<root>
+	<info name = "rpoll" version = "0.1.0">
+		<description>
+			This crate is meant to provide a poll mechanism for Rust.
+		</description>
+		<authors>
+			<author name="Apostolis Xekoukoulotakis" email="xekoukou@gmail.com"/>
+		</authors>
+	</info>
+
+	<dependencies>
+		<dependency name="time" version = "0.1"/>
+		<dependency name="libc" version = "0.1"/>
+	</dependencies>	
+	<crate type= "binding">
+		<oss>
+			<os name="linux" max_events="200">
+			</os>
+		</oss>
+
+	</crate>
+</root>
