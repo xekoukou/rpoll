@@ -154,7 +154,9 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
         callback = transmute(callback_ptr);
         }
         let new_timeout = callback(self,index);
-        self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+        if new_timeout >= 0 {
+            self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+        }
     }
 }
 
