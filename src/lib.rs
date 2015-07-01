@@ -256,9 +256,12 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
     }
 
     pub fn destroy_channel(&mut self, sender:PSender<i8>) ->Result<Result<(),Error>,()> {
-        match self.channels.binary_search_by(|a| a.0.cmp(&sender.fd)) {     
+        self.destroy_channel_by_fd(sender.fd)
+    }
+    fn destroy_channel_by_fd(&mut self, fd:c_int) ->Result<Result<(),Error>,()> {
+        match self.channels.binary_search_by(|a| a.0.cmp(&fd)) {     
             Ok(index) => {
-                let (fd,receiver,callback) = self.channels.remove(index);
+                let (_,receiver,callback) = self.channels.remove(index);
                 let no_error;
                 unsafe {
                     let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
@@ -278,6 +281,7 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
         }
     }
 
+
     pub fn borrow_channel(&self, index:usize) ->&PReceiver<i8> {
        &self.channels[index].1
     }
@@ -288,10 +292,34 @@ impl<'a> Drop for Poll<'a> {
 
     fn drop(&mut self) {
         loop {
-            match self.streams.pop() {
+            let rfd:Option<c_int>;
+            match self.streams.last() {
+                None => rfd = None,
+                Some(s) => rfd = Some(s.0)
+            };
+            match rfd {
                 None => break,
-                Some(s) => { 
-                    match self.detach_stream(s.0) {
+                Some(fd) => { 
+                    match self.detach_stream(fd) {
+                        Ok(_) => (),
+                        Err(_) => {
+                            println!("Error: Poll Object could't be destroyed correctly");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
+        loop {
+            let rfd:Option<c_int>;
+            match self.channels.last() {
+                None => rfd = None,
+                Some(s) => rfd = Some(s.0)
+            };
+            match rfd {
+                None => break,
+                Some(fd) => { 
+                    match self.destroy_channel_by_fd(fd) {
                         Ok(_) => (),
                         Err(_) => {
                             println!("Error: Poll Object could't be destroyed correctly");
