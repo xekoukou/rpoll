@@ -2,7 +2,7 @@ extern crate time;
 extern crate libc;
 /*The data types that are to be used by the extern functions. */
 
-use libc::{c_int,uint32_t};
+use libc::{c_void,ssize_t,c_int,c_uint,uint32_t,size_t};
 
 #[repr(C)]
 struct epoll_data_t {
@@ -22,21 +22,86 @@ fn epoll_create1(flags: c_int) -> c_int;
 fn epoll_ctl(epfd:c_int,op:c_int,fd:c_int,epoll_event:*mut epoll_event_t) ->c_int;
 fn epoll_wait(epfd: c_int,events:*mut epoll_event_t,maxevents: c_int, timeout: c_int) ->c_int;
 fn close(fd:c_int) -> c_int;
+fn eventfd(initval:c_uint,flags:c_int) -> c_int;
+fn write(fd:c_int,buf: *const c_void, count:size_t) -> ssize_t;
 }
 
 use std::net::TcpStream;
-use std::net::TcpListener;
 use std::io::Error;
 use std::os::unix::io::AsRawFd;
 use time::{get_time, Timespec, Duration};
-use std::mem::transmute;
+use std::mem::{size_of,transmute};
+use std::sync::mpsc;
+use std::sync::mpsc::{SendError,Receiver,Sender};
+
+pub type PReceiver<T> = Receiver<T>;
+pub struct PSender<T> {
+    sender:Sender<T>,
+    fd: c_int
+}
 
 
+impl<T> PSender<T> {
+
+   fn send(&self, t:T) -> Result<(),SendError<T>> {
+        let result = self.sender.send(t);
+        match result {
+            Ok(()) => unsafe {
+                let buf:u64 = 0;
+                //TODO Do not crash the application
+                let nwritten = write(self.fd,&buf as *const _ as *const c_void,8);
+                assert!(nwritten == 8);
+                Ok(())
+            },
+            Err(send_error) => {
+                Err(send_error)
+            }
+        }
+    }
+
+}
+
+//TODO These functions can be misused by the programer by specifying the wrong Type.
+/// It is the programers responcibity to provide the same type to both send and receive
+pub fn send<T:Sized>(sender:PSender<i8>,t:T) {
+    let ba = &t as *const _ as *const i8;
+    for i in 0..size_of::<T>()-1 {
+        unsafe {
+            //TODO Handle Errors
+            sender.send(*ba.offset(i as isize)).unwrap();
+        }
+    }
+}
+pub fn receive<T:Sized>(receiver:PReceiver<i8>) ->T {
+    let mut t:T;
+    unsafe {
+     t = std::mem::uninitialized();
+    }
+    for i in 0..size_of::<T>()-1 {
+        unsafe {
+            let ba = (&mut t as *mut _ as *mut i8).offset(i as isize);
+            //TODO Handle Errors
+            *ba = receiver.recv().unwrap();
+        }
+    }
+    t
+}
+
+
+fn pchannel<T>() -> (PSender<T>,PReceiver<T>) {
+    let fd;
+    unsafe {
+      fd = eventfd(0,0);
+    }
+    let (sender,receiver) = mpsc::channel();
+
+    (PSender { sender: sender, fd: fd } , receiver )
+}
 
 pub struct Poll<'a> {
     fd: c_int,
     streams: Vec<(c_int,TcpStream,&'a mut FnMut(&mut Poll,usize)->c_int)>,
-    listeners: Vec<(c_int,TcpListener,&'a mut FnMut(&TcpListener)->c_int)>,
+    channels: Vec<(c_int,PReceiver<i8>,&'a mut FnMut(&mut Poll,usize)->c_int)>,
     timers: Vec<(Timespec,c_int)>
 }
 
@@ -56,7 +121,7 @@ pub fn new() -> Result<Self,Error> {
         if fd<0 {
             Err(std::io::Error::last_os_error())
         } else {
-        Ok(Poll {fd:fd,streams:Vec::new(),listeners:Vec::new(),timers:Vec::new()})
+        Ok(Poll {fd:fd,streams:Vec::new(),channels:Vec::new(),timers:Vec::new()})
         }
     }
 
@@ -92,6 +157,7 @@ pub fn detach_stream(&mut self,id:i32) -> Result<Result<TcpStream,Error>,()> {
                 }
                 if no_error<0 {
                     self.streams.push((fd,stream,callback));
+                    self.streams.sort_by(|a,b| a.0.cmp(&b.0));
                     Ok(Err(std::io::Error::last_os_error()))
                 } else {
                     Ok(Ok(stream))
@@ -146,18 +212,76 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
     }
 
     fn perform_callback(&mut self,fd:c_int,current_time:&Timespec) {
-        let index =  self.streams.binary_search_by(|a| a.0.cmp(&fd)).unwrap();
-        let callback_ptr:* mut FnMut(&mut Poll,usize)->c_int;
-        let callback:& mut FnMut(&mut Poll,usize)->c_int;
-        unsafe {
-        callback_ptr = &mut self.streams[index].2;
-        callback = transmute(callback_ptr);
-        }
-        let new_timeout = callback(self,index);
-        if new_timeout >= 0 {
-            self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
+            Ok(index) => {
+            let callback_ptr:* mut FnMut(&mut Poll,usize)->c_int;
+            let callback:& mut FnMut(&mut Poll,usize)->c_int;
+            unsafe {
+                callback_ptr = &mut self.streams[index].2;
+                callback = transmute(callback_ptr);
+            }
+            let new_timeout = callback(self,index);
+            if new_timeout >= 0 {
+                self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+            }},
+            Err(_) => {
+            let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();
+            let callback_ptr:* mut FnMut(&mut Poll,usize)->c_int;
+            let callback:& mut FnMut(&mut Poll,usize)->c_int;
+            unsafe {
+                callback_ptr = &mut self.channels[index].2;
+                callback = transmute(callback_ptr);
+            }
+            let new_timeout = callback(self,index);
+            if new_timeout >= 0 {
+                self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+            }}
         }
     }
+
+    pub fn create_channel(&mut self, callback: &'a mut FnMut(&mut Poll,usize)->c_int) -> Result<PSender<i8>,Error> {
+        let (sender,receiver) = pchannel();
+        self.channels.push((sender.fd,receiver, callback));
+        let no_error;
+        unsafe {
+            let mut epoll_event = epoll_event_t {events:0x001,data:epoll_data_t {fd:sender.fd, dummy:0}};
+            no_error = epoll_ctl(self.fd,1,sender.fd, &mut epoll_event);
+        }
+        if no_error<0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            self.channels.sort_by(|a,b| a.0.cmp(&b.0));
+            Ok(sender)
+        }
+    }
+
+    pub fn destroy_channel(&mut self, sender:PSender<i8>) ->Result<Result<(),Error>,()> {
+        match self.channels.binary_search_by(|a| a.0.cmp(&sender.fd)) {     
+            Ok(index) => {
+                let (fd,receiver,callback) = self.channels.remove(index);
+                let no_error;
+                unsafe {
+                    let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
+                    no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
+                }
+                if no_error<0 {
+                    self.channels.push((fd,receiver,callback));
+                    self.channels.sort_by(|a,b| a.0.cmp(&b.0));
+                    Ok(Err(std::io::Error::last_os_error()))
+                } else {
+                    Ok(Ok(()))
+                }
+            },
+           Err(_) => {
+               Err(())
+           }            
+        }
+    }
+
+    pub fn borrow_channel(&self, index:usize) ->&PReceiver<i8> {
+       &self.channels[index].1
+    }
+
 }
 
 impl<'a> Drop for Poll<'a> {
@@ -175,12 +299,6 @@ impl<'a> Drop for Poll<'a> {
                         }
                     }
                 }
-            }
-        }
-        loop {
-            match self.listeners.pop() {
-                None => break,
-                Some(_) => () 
             }
         }
         unsafe {
