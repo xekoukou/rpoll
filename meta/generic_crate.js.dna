@@ -35,11 +35,24 @@ for (var i = 0; i<authors.length; i++) {
 .
 .[dependencies]
 var external_crate_names = [];
+var git_dependencies = [];
 $("dependencies dependency").each(function(){
     var name = $(this).attr("name");
     var version = $(this).attr("version");
+    var git = $(this).attr("git");
+if(git == undefined) {
 .@{name} = "@{version}"
+} else {
+    git_dependencies.push([name,git]);
+}
 external_crate_names.push(name);
+});
+
+.
+git_dependencies.forEach(function(each){
+.[dependencies.@{each[0]}]
+.git = "@{each[1]}"
+.
 });
 
 function generate_external_crate_prelude() {

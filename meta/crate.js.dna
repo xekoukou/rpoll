@@ -55,31 +55,38 @@ binding.custom_code = function() {
 .impl<T> PSender<T> {
 .
 .   fn send(&self, t:T) -> Result<(),SendError<T>> {
-.        let result = self.sender.send(t);
-.        match result {
-.            Ok(()) => unsafe {
-.                let buf:u64 = 0;
-.                //TODO Do not crash the application
-.                let nwritten = write(self.fd,&buf as *const _ as *const c_void,8);
-.                assert!(nwritten == 8);
-.                Ok(())
-.            },
-.            Err(send_error) => {
-.                Err(send_error)
-.            }
-.        }
+.        self.sender.send(t)
 .    }
 .
 .}
 .
 .//TODO These functions can be misused by the programer by specifying the wrong Type.
 ./// It is the programers responcibity to provide the same type to both send and receive
-.pub fn send<T:Sized>(sender:PSender<i8>,t:T) {
+.pub fn send<T:Sized>(sender:PSender<i8>,t:T) ->Result<(),SendError<i8>> {
 .    let ba = &t as *const _ as *const i8;
+.    let mut result=Ok(());
 .    for i in 0..size_of::<T>()-1 {
-.        unsafe {
 .            //TODO Handle Errors
-.            sender.send(*ba.offset(i as isize)).unwrap();
+.        unsafe {
+.            result = sender.send(*ba.offset(i as isize));
+.        }
+.        match result {
+.            Ok(()) => {},
+.            Err(_) => {
+.                break;
+.            }
+.        }
+.    }
+.    match result {
+.        Ok(()) => unsafe {
+.            let buf:u64 = 0;
+.            //TODO Do not crash the application. Return an error instead.
+.            let nwritten = write(sender.fd,&buf as *const _ as *const c_void,8);
+.            assert!(nwritten == 8);
+.            Ok(())
+.        },
+.        Err(send_error) => {
+.            Err(send_error)
 .        }
 .    }
 .}
@@ -158,10 +165,10 @@ binding.custom_code = function() {
 .       } 
 .    }
 .
-.pub fn detach_stream(&mut self,id:i32) -> Result<Result<TcpStream,Error>,()> {
-.        match self.streams.binary_search_by(|a| a.0.cmp(&id)) {     
+.pub fn detach_stream(&mut self,fd:i32) -> Result<Result<TcpStream,Error>,()> {
+.        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {     
 .            Ok(index) => {
-.                let (fd,stream,callback) = self.streams.remove(index);
+.                let (_,stream,callback) = self.streams.remove(index);
 .                let no_error;
 .                unsafe {
 .                    let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
