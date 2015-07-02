@@ -62,7 +62,7 @@ binding.custom_code = function() {
 .
 .//TODO These functions can be misused by the programer by specifying the wrong Type.
 ./// It is the programers responcibity to provide the same type to both send and receive
-.pub fn send<T:Sized>(sender:PSender<i8>,t:T) ->Result<(),SendError<i8>> {
+.pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
 .    let ba = &t as *const _ as *const i8;
 .    let mut result=Ok(());
 .    for i in 0..size_of::<T>()-1 {
@@ -91,7 +91,7 @@ binding.custom_code = function() {
 .    }
 .}
 
-.pub fn receive<T:Sized>(receiver:PReceiver<i8>) ->T {
+.pub fn receive<T:Sized>(receiver:&PReceiver<i8>) ->T {
 .    let mut t:T;
 .    unsafe {
 .     t = std::mem::uninitialized();

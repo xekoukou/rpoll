@@ -51,7 +51,7 @@ impl<T> PSender<T> {
 
 //TODO These functions can be misused by the programer by specifying the wrong Type.
 /// It is the programers responcibity to provide the same type to both send and receive
-pub fn send<T:Sized>(sender:PSender<i8>,t:T) ->Result<(),SendError<i8>> {
+pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
     let ba = &t as *const _ as *const i8;
     let mut result=Ok(());
     for i in 0..size_of::<T>()-1 {
@@ -69,7 +69,7 @@ pub fn send<T:Sized>(sender:PSender<i8>,t:T) ->Result<(),SendError<i8>> {
     match result {
         Ok(()) => unsafe {
             let buf:u64 = 0;
-            //TODO Do not crash the application
+            //TODO Do not crash the application. Return an error instead.
             let nwritten = write(sender.fd,&buf as *const _ as *const c_void,8);
             assert!(nwritten == 8);
             Ok(())
@@ -79,7 +79,7 @@ pub fn send<T:Sized>(sender:PSender<i8>,t:T) ->Result<(),SendError<i8>> {
         }
     }
 }
-pub fn receive<T:Sized>(receiver:PReceiver<i8>) ->T {
+pub fn receive<T:Sized>(receiver:&PReceiver<i8>) ->T {
     let mut t:T;
     unsafe {
      t = std::mem::uninitialized();
