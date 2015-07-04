@@ -131,7 +131,7 @@ pub fn obtain_callback_data<'a,T:Sized>(data:*mut i8) -> &'a mut Box<T> {
 pub struct Poll {
     fd: c_int,
     streams: Vec<(c_int,TcpStream,&'static Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
-    channels: Vec<(c_int,PReceiver<i8>,&'static Fn(&mut Poll,usize, *mut i8)->c_int,*mut i8)>,
+    channels: Vec<(c_int,PReceiver<i8>,&'static Fn(&mut Poll,usize)->c_int)>,
     timers: Vec<(Timespec,c_int)>
 }
 
@@ -257,23 +257,22 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
             }},
             Err(_) => {
             let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();
-            let callback_ptr:*const Fn(&mut Poll,usize,*mut i8)->c_int;
-            let callback:& Fn(&mut Poll,usize,*mut i8)->c_int;
+            let callback_ptr:*const Fn(&mut Poll,usize)->c_int;
+            let callback:& Fn(&mut Poll,usize)->c_int;
             unsafe {
                 callback_ptr = &mut self.channels[index].2;
                 callback = transmute(callback_ptr);
             }
-            let data = self.streams[index].3;
-            let new_timeout = callback(self,index,data);
+            let new_timeout = callback(self,index);
             if new_timeout >= 0 {
                 self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
             }}
         }
     }
 
-    pub fn create_channel(&mut self, callback: &'static Fn(&mut Poll,usize,*mut i8)->c_int,data:*mut i8) -> Result<PSender<i8>,Error> {
+    pub fn create_channel(&mut self, callback: &'static Fn(&mut Poll,usize)->c_int) -> Result<PSender<i8>,Error> {
         let (sender,receiver) = pchannel();
-        self.channels.push((sender.fd,receiver, callback,data));
+        self.channels.push((sender.fd,receiver, callback));
         let no_error;
         unsafe {
             let mut epoll_event = epoll_event_t {events:0x001,data:epoll_data_t {fd:sender.fd, dummy:0}};
@@ -293,14 +292,14 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
     fn destroy_channel_by_fd(&mut self, fd:c_int) ->Result<Result<(),Error>,()> {
         match self.channels.binary_search_by(|a| a.0.cmp(&fd)) {     
             Ok(index) => {
-                let (_,receiver,callback,data) = self.channels.remove(index);
+                let (_,receiver,callback) = self.channels.remove(index);
                 let no_error;
                 unsafe {
                     let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
                     no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
                 }
                 if no_error<0 {
-                    self.channels.push((fd,receiver,callback,data));
+                    self.channels.push((fd,receiver,callback));
                     self.channels.sort_by(|a,b| a.0.cmp(&b.0));
                     Ok(Err(std::io::Error::last_os_error()))
                 } else {
