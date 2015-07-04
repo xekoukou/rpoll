@@ -50,7 +50,7 @@ impl<T> PSender<T> {
 }
 
 //TODO These functions can be misused by the programer by specifying the wrong Type.
-/// It is the programers responcibity to provide the same type to both send and receive
+/// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
 pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
     let ba = &t as *const _ as *const i8;
     let mut result=Ok(());
@@ -79,6 +79,7 @@ pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
         }
     }
 }
+/// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
 pub fn receive<T:Sized>(receiver:&PReceiver<i8>) ->T {
     let mut t:T;
     unsafe {
@@ -105,10 +106,32 @@ fn pchannel<T>() -> (PSender<T>,PReceiver<T>) {
     (PSender { sender: sender, fd: fd } , receiver )
 }
 
-pub struct Poll<'a> {
+///The programer needs to use these functions to obtain the common data.
+///The boxed structure might contain references to borrowed stack memory
+/// that goes at of scope, so care must be taken by the programmer.
+pub fn borrow_callback_data<T:Sized>(t:&mut Box<T>)-> *mut i8 {
+    let data:*mut i8;
+    unsafe {
+        data = transmute(t);
+    }
+    data
+}
+
+///The programer needs to use these functions to obtain the common data.
+///The boxed structure might contain references to borrowed stack memory
+/// that goes at of scope, so care must be taken by the programmer.
+pub fn obtain_callback_data<'a,T:Sized>(data:*mut i8) -> &'a mut Box<T> {
+    let t:&mut Box<T>;
+    unsafe {
+        t = transmute(data);
+    }
+    t
+}
+
+pub struct Poll {
     fd: c_int,
-    streams: Vec<(c_int,TcpStream,&'a mut FnMut(&mut Poll,usize)->c_int)>,
-    channels: Vec<(c_int,PReceiver<i8>,&'a mut FnMut(&mut Poll,usize)->c_int)>,
+    streams: Vec<(c_int,TcpStream,&'static Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
+    channels: Vec<(c_int,PReceiver<i8>,&'static Fn(&mut Poll,usize, *mut i8)->c_int,*mut i8)>,
     timers: Vec<(Timespec,c_int)>
 }
 
@@ -118,7 +141,7 @@ pub enum PollEvent {
 }
 
 
-impl<'a> Poll<'a> {
+impl Poll {
 
 pub fn new() -> Result<Self,Error> {
         let fd;
@@ -132,12 +155,12 @@ pub fn new() -> Result<Self,Error> {
         }
     }
 
-pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'a mut FnMut(&mut Poll,usize)->i32) -> Result<Result<i32,Error>,()> {
+pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'static Fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<Result<i32,Error>,()> {
        let fd = stream.as_raw_fd();
        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
            Ok(_) => Err(()),
            Err(_) => {
-       self.streams.push((fd,stream,callback));
+       self.streams.push((fd,stream,callback,data));
        let no_error;
        unsafe {
            let mut epoll_event = epoll_event_t {events:event as uint32_t,data:epoll_data_t {fd:fd, dummy:0}};
@@ -156,14 +179,14 @@ pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'a mu
 pub fn detach_stream(&mut self,fd:i32) -> Result<Result<TcpStream,Error>,()> {
         match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {     
             Ok(index) => {
-                let (_,stream,callback) = self.streams.remove(index);
+                let (_,stream,callback,data) = self.streams.remove(index);
                 let no_error;
                 unsafe {
                     let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
                     no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
                 }
                 if no_error<0 {
-                    self.streams.push((fd,stream,callback));
+                    self.streams.push((fd,stream,callback,data));
                     self.streams.sort_by(|a,b| a.0.cmp(&b.0));
                     Ok(Err(std::io::Error::last_os_error()))
                 } else {
@@ -221,34 +244,36 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
     fn perform_callback(&mut self,fd:c_int,current_time:&Timespec) {
         match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
             Ok(index) => {
-            let callback_ptr:* mut FnMut(&mut Poll,usize)->c_int;
-            let callback:& mut FnMut(&mut Poll,usize)->c_int;
+            let callback_ptr:*const Fn(&mut Poll,usize,*mut i8)->c_int;
+            let callback:& mut Fn(&mut Poll,usize,*mut i8)->c_int;
             unsafe {
-                callback_ptr = &mut self.streams[index].2;
+                callback_ptr = self.streams[index].2;
                 callback = transmute(callback_ptr);
             }
-            let new_timeout = callback(self,index);
+            let data = self.streams[index].3;
+            let new_timeout = callback(self,index,data);
             if new_timeout >= 0 {
                 self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
             }},
             Err(_) => {
             let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();
-            let callback_ptr:* mut FnMut(&mut Poll,usize)->c_int;
-            let callback:& mut FnMut(&mut Poll,usize)->c_int;
+            let callback_ptr:*const Fn(&mut Poll,usize,*mut i8)->c_int;
+            let callback:& Fn(&mut Poll,usize,*mut i8)->c_int;
             unsafe {
                 callback_ptr = &mut self.channels[index].2;
                 callback = transmute(callback_ptr);
             }
-            let new_timeout = callback(self,index);
+            let data = self.streams[index].3;
+            let new_timeout = callback(self,index,data);
             if new_timeout >= 0 {
                 self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
             }}
         }
     }
 
-    pub fn create_channel(&mut self, callback: &'a mut FnMut(&mut Poll,usize)->c_int) -> Result<PSender<i8>,Error> {
+    pub fn create_channel(&mut self, callback: &'static Fn(&mut Poll,usize,*mut i8)->c_int,data:*mut i8) -> Result<PSender<i8>,Error> {
         let (sender,receiver) = pchannel();
-        self.channels.push((sender.fd,receiver, callback));
+        self.channels.push((sender.fd,receiver, callback,data));
         let no_error;
         unsafe {
             let mut epoll_event = epoll_event_t {events:0x001,data:epoll_data_t {fd:sender.fd, dummy:0}};
@@ -268,14 +293,14 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
     fn destroy_channel_by_fd(&mut self, fd:c_int) ->Result<Result<(),Error>,()> {
         match self.channels.binary_search_by(|a| a.0.cmp(&fd)) {     
             Ok(index) => {
-                let (_,receiver,callback) = self.channels.remove(index);
+                let (_,receiver,callback,data) = self.channels.remove(index);
                 let no_error;
                 unsafe {
                     let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
                     no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
                 }
                 if no_error<0 {
-                    self.channels.push((fd,receiver,callback));
+                    self.channels.push((fd,receiver,callback,data));
                     self.channels.sort_by(|a,b| a.0.cmp(&b.0));
                     Ok(Err(std::io::Error::last_os_error()))
                 } else {
@@ -295,7 +320,7 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
 
 }
 
-impl<'a> Drop for Poll<'a> {
+impl Drop for Poll {
 
     fn drop(&mut self) {
         loop {
