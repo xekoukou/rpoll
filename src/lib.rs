@@ -151,10 +151,10 @@ pub fn new() -> Result<Self,Error> {
         }
     }
 
-pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'static Fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<Result<i32,Error>,()> {
+pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'static Fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<i32,Error> {
        let fd = stream.as_raw_fd();
        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
-           Ok(_) => Err(()),
+           Ok(_) => panic!("Stream already exits at this Poll object."),
            Err(_) => {
        self.streams.push((fd,stream,callback,data));
        let no_error;
@@ -163,36 +163,46 @@ pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'stat
            no_error = epoll_ctl(self.fd,1,fd, &mut epoll_event);
        }
        if no_error<0 {
-           Ok(Err(std::io::Error::last_os_error()))
+           Err(std::io::Error::last_os_error())
        } else {
            self.streams.sort_by(|a,b| a.0.cmp(&b.0));
-           Ok(Ok(fd))
+           Ok(fd)
        }
        }
        } 
     }
 
-pub fn detach_stream(&mut self,fd:i32) -> Result<Result<TcpStream,Error>,()> {
-        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {     
-            Ok(index) => {
-                let (_,stream,callback,data) = self.streams.remove(index);
-                let no_error;
-                unsafe {
-                    let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
-                    no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
-                }
-                if no_error<0 {
-                    self.streams.push((fd,stream,callback,data));
-                    self.streams.sort_by(|a,b| a.0.cmp(&b.0));
-                    Ok(Err(std::io::Error::last_os_error()))
-                } else {
-                    Ok(Ok(stream))
-                }
-            },
-           Err(_) => {
-               Err(())
-           }            
+pub fn detach_stream(&mut self,fd:i32) -> Result<TcpStream,Error> {
+        let index = self.streams.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
+        let (_,stream,callback,data) = self.streams.remove(index);
+        let no_error;
+        unsafe {
+            let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
+            no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
         }
+        if no_error<0 {
+            self.streams.push((fd,stream,callback,data));
+            self.streams.sort_by(|a,b| a.0.cmp(&b.0));
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(stream)
+        }
+    }
+
+pub fn detach_stream_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
+       let (fd,stream,callback,data) = self.streams.remove(index);
+       let no_error;
+       unsafe {
+           let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
+           no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
+       }
+       if no_error<0 {
+           self.streams.push((fd,stream,callback,data));
+           self.streams.sort_by(|a,b| a.0.cmp(&b.0));
+           Err(std::io::Error::last_os_error())
+       } else {
+           Ok(stream)
+       }
     }
 
 pub fn borrow_stream(&self, index:usize) ->&TcpStream {
@@ -283,29 +293,23 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
         }
     }
 
-    pub fn destroy_channel(&mut self, sender:PSender<i8>) ->Result<Result<(),Error>,()> {
+    pub fn destroy_channel(&mut self, sender:PSender<i8>) ->Result<(),Error> {
         self.destroy_channel_by_fd(sender.fd)
     }
-    fn destroy_channel_by_fd(&mut self, fd:c_int) ->Result<Result<(),Error>,()> {
-        match self.channels.binary_search_by(|a| a.0.cmp(&fd)) {     
-            Ok(index) => {
-                let (_,receiver,callback,data) = self.channels.remove(index);
-                let no_error;
-                unsafe {
-                    let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
-                    no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
-                }
-                if no_error<0 {
-                    self.channels.push((fd,receiver,callback,data));
-                    self.channels.sort_by(|a,b| a.0.cmp(&b.0));
-                    Ok(Err(std::io::Error::last_os_error()))
-                } else {
-                    Ok(Ok(()))
-                }
-            },
-           Err(_) => {
-               Err(())
-           }            
+    fn destroy_channel_by_fd(&mut self, fd:c_int) -> Result<(),Error> {
+        let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
+        let (_,receiver,callback,data) = self.channels.remove(index);
+        let no_error;
+        unsafe {
+            let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
+            no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
+        }
+        if no_error<0 {
+            self.channels.push((fd,receiver,callback,data));
+            self.channels.sort_by(|a,b| a.0.cmp(&b.0));
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
         }
     }
 
