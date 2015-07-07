@@ -41,7 +41,7 @@ pub struct PSender<T> {
 }
 
 
-impl<T> PSender<T> {
+impl<T:Sized + Send> PSender<T> {
 
    fn send(&self, t:T) -> Result<(),SendError<T>> {
         self.sender.send(t)
@@ -51,7 +51,7 @@ impl<T> PSender<T> {
 
 //TODO These functions can be misused by the programer by specifying the wrong Type.
 /// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
-pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
+pub fn send<T:Sized + Send>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
     let ba = &t as *const _ as *const i8;
     let mut result=Ok(());
     for i in 0..size_of::<T>()-1 {
@@ -80,7 +80,7 @@ pub fn send<T:Sized>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
     }
 }
 /// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
-pub fn receive<T:Sized>(receiver:&PReceiver<i8>) ->T {
+pub fn receive<T:Send + Sized>(receiver:&PReceiver<i8>) ->T {
     let mut t:T;
     unsafe {
      t = std::mem::uninitialized();
