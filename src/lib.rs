@@ -124,10 +124,10 @@ pub fn obtain_callback_data<'a,T:Sized>(data:*mut i8) -> &'a mut T {
     t
 }
 
-pub struct Poll {
+pub struct Poll<'a> {
     fd: c_int,
-    streams: Vec<(c_int,TcpStream,&'static Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
-    channels: Vec<(c_int,PReceiver<i8>,&'static Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
+    streams: Vec<(c_int,TcpStream,&'a Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
+    channels: Vec<(c_int,PReceiver<i8>,&'a Fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
     timers: Vec<(Timespec,c_int)>
 }
 
@@ -137,7 +137,7 @@ pub enum PollEvent {
 }
 
 
-impl Poll {
+impl<'a> Poll<'a> {
 
 pub fn new() -> Result<Self,Error> {
         let fd;
@@ -151,7 +151,7 @@ pub fn new() -> Result<Self,Error> {
         }
     }
 
-pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'static Fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<i32,Error> {
+pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: &'a Fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<i32,Error> {
        let fd = stream.as_raw_fd();
        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
            Ok(_) => panic!("Stream already exits at this Poll object."),
@@ -277,7 +277,7 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
         }
     }
 
-    pub fn create_channel(&mut self, callback: &'static Fn(&mut Poll,usize,*mut i8)->c_int,data:*mut i8) -> Result<PSender<i8>,Error> {
+    pub fn create_channel(&mut self, callback: &'a Fn(&mut Poll,usize,*mut i8)->c_int,data:*mut i8) -> Result<PSender<i8>,Error> {
         let (sender,receiver) = pchannel();
         self.channels.push((sender.fd,receiver, callback,data));
         let no_error;
@@ -320,7 +320,7 @@ pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
 
 }
 
-impl Drop for Poll {
+impl<'a> Drop for Poll<'a> {
 
     fn drop(&mut self) {
         loop {
