@@ -140,14 +140,9 @@ pub enum PollEvent {
 impl Poll {
 
 pub fn new() -> Result<Self,Error> {
-        let mut fd = -1;
-        for _ in 0..4 {
-            unsafe {
-                fd = epoll_create1(0);
-            }
-            if fd > 0 {
-                break;
-            }
+        let fd;
+        unsafe {
+             fd = epoll_create1(0);
         }
         if fd<0 {
             Err(std::io::Error::last_os_error())
