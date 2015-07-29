@@ -68,12 +68,12 @@ for( var i = 0; i < path[0].length; i++) {
                         process.exit(1);
                     }
                 }
-                paths.push([path.slice().push(dep.name),"./dependencies/"+usr+"/"+prj]);
+                paths.push([path.slice().push(dep.name),"./dependencies/"+usr+"/"+prj+"/meta"]);
 
 .{
-../exec("./dependencies/@{usr+'/'+prj}/meta/crate.js.dna",[meta])
-                if(meta_args in dep) {
-.lmeta["@{dep.name}"] = new @{dep.name}(true,@{meta_args});
+../!exec("./dependencies/@{usr+'/'+prj}/meta/crate.js.dna",[meta])
+                if(dep.meta_args != undefined) {
+.lmeta["@{dep.name}"] = new @{dep.name}(true,@{dep.meta_args});
                 } else {
 .lmeta["@{dep.name}"] = new @{dep.name}(true);
                 }
@@ -90,7 +90,6 @@ for( var i = 0; i < path[0].length; i++) {
 function Crate(meta) {
 
 this.meta={};
-this.type =$("crate").attr("type");
 this.dependencies=[];
 this.generate_external_crate_prelude = generate_external_crate_prelude;
 
@@ -107,6 +106,7 @@ var $ = cheerio.load(xml_file, {
     xmlMode: true
 });
 
+this.type =$("crate").attr("type");
 
 function generate_dependencies() {
 

@@ -110,7 +110,7 @@ function RPoll(meta) {
     }
 
 this.poll = function(streams,channels) {
-
+./!output("@{this.output}")
 .
 .pub struct Poll {
 .    fd: c_int,
