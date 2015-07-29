@@ -1,9 +1,20 @@
-./!include("./generic_crate.js.dna")
 ./!include("./binding_crate.js.dna")
 
-var binding = new binding_crate();
+./!dots(-1)
+var meta_arg = "@{process.argv[2]}";
+if(meta_arg != "meta") {
+ console.log("This is a meta package, it is not possible to build a library.");
+}
+./!dots(1)
 
-binding.data_types = function() {
+function RPoll(meta) {
+    Binding.call(this,meta);
+    
+    if(meta) {
+        this.output = "../src/rpoll.rs";
+    }
+
+    this.data_types.epoll = function() {
 
 .use libc::{c_void,ssize_t,c_int,c_uint,uint32_t,size_t};
 .
@@ -20,22 +31,23 @@ binding.data_types = function() {
 .    data: epoll_data_t
 .}
 
-}
+    }
 
 
-binding.extern={};
 
-
-binding.extern.epoll = function() {
+    this.extern.epoll = function() {
 .fn epoll_create1(flags: c_int) -> c_int;
 .fn epoll_ctl(epfd:c_int,op:c_int,fd:c_int,epoll_event:*mut epoll_event_t) ->c_int;
 .fn epoll_wait(epfd: c_int,events:*mut epoll_event_t,maxevents: c_int, timeout: c_int) ->c_int;
 .fn close(fd:c_int) -> c_int;
 .fn eventfd(initval:c_uint,flags:c_int) -> c_int;
 .fn write(fd:c_int,buf: *const c_void, count:size_t) -> ssize_t;
-}
+    }
 
-binding.custom_code = function() {
+    binding.generate();
+
+    if(this.target_os == "linux") {
+
 .
 .use std::net::TcpStream;
 .use std::io::Error;
@@ -56,91 +68,58 @@ binding.custom_code = function() {
 .impl<T:Sized + Send> PSender<T> {
 .
 .   fn send(&self, t:T) -> Result<(),SendError<T>> {
-.        self.sender.send(t)
-.    }
-.
-.}
-.
-.//TODO These functions can be misused by the programer by specifying the wrong Type.
-./// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
-.pub fn send<T:Sized + Send>(sender:&PSender<i8>,t:T) ->Result<(),SendError<i8>> {
-.    let ba = &t as *const _ as *const i8;
-.    let mut result=Ok(());
-.    for i in 0..size_of::<T>()-1 {
-.            //TODO Handle Errors
-.        unsafe {
-.            result = sender.send(*ba.offset(i as isize));
-.        }
+.        let result = self.sender.send(t);
 .        match result {
-.            Ok(()) => {},
-.            Err(_) => {
-.                break;
+.            Ok(()) => unsafe {
+.                let buf:u64 = 1;
+.                //TODO Do not crash the application. Return an error instead.
+.                println!("Waking the poll.");
+.                
+.                let nwritten = write(sender.fd,&buf as *const _ as *const c_void,8);
+.                assert!(nwritten == 8);
+.                println!("Woke the poll");
+.                Ok(())
+.            },
+.            Err(send_error) => {
+.                Err(send_error)
 .            }
 .        }
 .    }
-.    match result {
-.        Ok(()) => unsafe {
-.            let buf:u64 = 0;
-.            //TODO Do not crash the application. Return an error instead.
-.            let nwritten = write(sender.fd,&buf as *const _ as *const c_void,8);
-.            assert!(nwritten == 8);
-.            Ok(())
-.        },
-.        Err(send_error) => {
-.            Err(send_error)
-.        }
-.    }
 .}
-
-./// NOT TYPE SAFE It is the programers responcibity to provide the same type to both the send and receive function.
-.pub fn receive<T:Send + Sized>(receiver:&PReceiver<i8>) ->T {
-.    let mut t:T;
-.    unsafe {
-.     t = std::mem::uninitialized();
-.    }
-.    for i in 0..size_of::<T>()-1 {
+.
+.
+.fn pchannel<T>() -> Result<(PSender<T>,PReceiver<T>),Error> {
+.    loop {
+.        let fd;
 .        unsafe {
-.            let ba = (&mut t as *mut _ as *mut i8).offset(i as isize);
-.            //TODO Handle Errors
-.            *ba = receiver.recv().unwrap();
+.            fd = eventfd(0,0);
+.        }
+.        if fd<0 {
+.            let error = std::io::Error::last_os_error();
+.            let errno = error.raw_os_error().unwrap();
+.            if errno != 4  {
+.                println!("PChannel Error.");
+.                return Err(error)
+.            }
+.        } else {
+.            let (sender,receiver) = mpsc::channel();
+.            return Ok((PSender { sender: sender, fd: fd } , receiver ))
 .        }
 .    }
-.    t
 .}
-.
-.
-.fn pchannel<T>() -> (PSender<T>,PReceiver<T>) {
-.    let fd;
-.    unsafe {
-.      fd = eventfd(0,0);
-.    }
-.    let (sender,receiver) = mpsc::channel();
-.
-.    (PSender { sender: sender, fd: fd } , receiver )
-.}
-.
-.///The programmer needs to use these functions to obtain the common data.
-.pub fn borrow_callback_data<T:Sized>(t:&mut T)-> *mut i8 {
-.    let data:*mut i8;
-.    unsafe {
-.        data = transmute(t);
-.    }
-.    data
-.}
-.
-.///The programmer needs to use these functions to obtain the common data.
-.pub fn obtain_callback_data<'a,T:Sized>(data:*mut i8) -> &'a mut T {
-.    let t:&mut T;
-.    unsafe {
-.        t = transmute(data);
-.    }
-.    t
-.}
+    }
+
+this.poll = function(streams,channels) {
+
 .
 .pub struct Poll {
 .    fd: c_int,
-.    streams: Vec<(c_int,TcpStream,fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
-.    channels: Vec<(c_int,PReceiver<i8>,fn(&mut Poll,usize,*mut i8)->c_int,*mut i8)>,
+    for(var i = 0; i <streams.length; i++) {
+.    streams_@{streams[i]}: Vec<(c_int,TcpStream,fn(&mut Poll,usize,&mut @{streams[i]})->c_int,mut @{streams[i]})>,
+    }
+    for(var i = 0; i < channels.length; i++) {
+.    channels_@{channels[i][0]}_@{channels[i][1]}: Vec<(c_int,PReceiver<@{channels[i][0]}>,fn(&mut Poll,usize,&mut @{channels[i][1]})->c_int,mut @{channels[i][1]})>,
+    }
 .    timers: Vec<(Timespec,c_int)>
 .}
 .
@@ -160,194 +139,249 @@ binding.custom_code = function() {
 .        if fd<0 {
 .            Err(std::io::Error::last_os_error())
 .        } else {
-.        Ok(Poll {fd:fd,streams:Vec::new(),channels:Vec::new(),timers:Vec::new()})
+.        Ok(Poll {fd:fd,
+    for(var i = 0; i <streams.length; i++) {
+./+ streams_@{streams[i]}:Vec:new(),
+    } 
+    for(var i = 0; i <channels.length; i++) {
+./+ channels_@{channels[i][0]_@{channels[1]}}:Vec::new(),
+    }
+./+ timers:Vec::new()})
 .        }
 .    }
 .
-.pub fn attach_stream(&mut self,stream:TcpStream,event:PollEvent,callback: fn(&mut Poll,usize,*mut i8)->i32,data:*mut i8) -> Result<i32,Error> {
+    for(var i = 0; i <streams.length; i++) {
+.pub fn attach_stream_@{streams[i]}(&mut self,stream:TcpStream,event:PollEvent,callback: fn(&mut Poll,usize,&mut @{streams[i]})->i32,data: mut @{streams[i]}) -> Result<i32,Error> {
 .       let fd = stream.as_raw_fd();
-.       match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
-.           Ok(_) => panic!("Stream already exits at this Poll object."),
-.           Err(_) => {
-.       self.streams.push((fd,stream,callback,data));
-.       let no_error;
-.       unsafe {
-.           let mut epoll_event = epoll_event_t {events:event as uint32_t,data:epoll_data_t {fd:fd, dummy:0}};
-.           no_error = epoll_ctl(self.fd,1,fd, &mut epoll_event);
-.       }
-.       if no_error<0 {
-.           Err(std::io::Error::last_os_error())
-.       } else {
-.           self.streams.sort_by(|a,b| a.0.cmp(&b.0));
-.           Ok(fd)
-.       }
+.       match self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)) {
+.       Ok(_) => panic!("Stream already exits at this Poll object."),
+.       Err(_) => {
+.           self.streams_@{streams[i]}.push((fd,stream,callback,data));
+.           let event_ = event as uint32_t;
+.           loop {
+.               let no_error;
+.               unsafe {
+.                   let mut epoll_event = epoll_event_t {events:event_,data:epoll_data_t {fd:fd, dummy:0}};
+.                   no_error = epoll_ctl(self.fd,1,fd, &mut epoll_event);
+.               }
+.               if no_error<0 {
+.                   let error = std::io::Error::last_os_error();
+.                   let errno = error.raw_os_error().unwrap();
+.                   if errno != 4  {
+.                       println!("Attach Stream Error");
+.                       return Err(error);
+.                   }
+.               } else {
+.                   self.streams_@{streams[i]}.sort_by(|a,b| a.0.cmp(&b.0));
+.                   return Ok(fd);
+.               }
+.           }
 .       }
 .       } 
 .    }
 .
-.pub fn detach_stream(&mut self,fd:i32) -> Result<TcpStream,Error> {
-.        let index = self.streams.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
-.        let (_,stream,callback,data) = self.streams.remove(index);
+.pub fn detach_stream_@{streams[i]}_by_fd(&mut self,fd:i32) -> Result<TcpStream,Error> {
+.        self.detach_stream_@{stream[i]}(fd)
+.    }
+.
+.pub fn detach_stream_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
+.        let fd = self.streams[index].0;
+.        self.detach_stream_@{streams[i]}(fd)
+.    }
+.
+.fn detach_stream_@{stream[i]}(&mut self,fd:i32) -> Result<TcpStream,Error> {
+.    loop {
+.        let index = self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
+.        let (_,stream,callback,data) = self.streams_@{streams[i]}.remove(index);
 .        let no_error;
 .        unsafe {
 .            let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
 .            no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
 .        }
 .        if no_error<0 {
-.            self.streams.push((fd,stream,callback,data));
-.            self.streams.sort_by(|a,b| a.0.cmp(&b.0));
-.            Err(std::io::Error::last_os_error())
-.        } else {
-.            Ok(stream)
-.        }
-.    }
-.
-.pub fn detach_stream_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
-.       let (fd,stream,callback,data) = self.streams.remove(index);
-.       let no_error;
-.       unsafe {
-.           let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
-.           no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
-.       }
-.       if no_error<0 {
-.           self.streams.push((fd,stream,callback,data));
-.           self.streams.sort_by(|a,b| a.0.cmp(&b.0));
-.           Err(std::io::Error::last_os_error())
-.       } else {
-.           Ok(stream)
-.       }
-.    }
-.
-.pub fn borrow_stream(&self, index:usize) ->&TcpStream {
-.       &self.streams[index].1
-.    }
-.
-
-var max_events = $("crate oss os[name='linux']").attr("max_events");
-if(max_events == undefined) {
-//Default value
-max_events = 30;
-}
-
-.
-.pub fn wait(&mut self,timeout:i32) ->Result<(),Error> {
-.        let mut events:[epoll_event_t;@{max_events}];
-.        let mut number_of_events;
-.        unsafe {
-.            events = std::mem::uninitialized();
-.            number_of_events = epoll_wait(self.fd,&mut events[0] as *mut epoll_event_t,@{max_events},timeout);
-.        }
-.        if number_of_events < 0 {
-.            Err(std::io::Error::last_os_error())
-.        } else {
-.        let current_time = get_time();
-.        while !self.timers.is_empty() {
-.            if self.timers[0].0.lt(&current_time) {
-.                let fd = self.timers[0].1;
-.                self.perform_callback(fd,&current_time);
-.                self.timers.pop();
-.            } else {
-.                break;
-.            } 
-.        }
-.        for i in 0..number_of_events {
-.            let fd = events[i as usize].data.fd;
-.            self.perform_callback(fd,&current_time);
-.        }
-.        self.timers.sort_by(|a,b| a.0.cmp(&b.0));
-.        if self.timers.is_empty() {
-.            self.wait(-1)
-.        } else {
-.            let mut new_timeout = (self.timers[0].0-get_time()).num_milliseconds() as c_int;
-.            if new_timeout < 0 {
-.                new_timeout = 0;
+.            self.streams_@{streams[i]}.push((fd,stream,callback,data));
+.            self.streams_@{streams[i]}.sort_by(|a,b| a.0.cmp(&b.0));
+.            let error = std::io::Error::last_os_error();
+.            let errno = error.raw_os_error().unwrap();
+.            if errno != 4  {
+.                println!("Detach stream Error");
+.                return Err(error);
 .            }
-.            self.wait(new_timeout)
+.        } else {
+.           return Ok(stream);
 .        }
+.    }
+.    }
+.
+.pub fn borrow_stream_@{streams[i]}(&self, index:usize) ->&TcpStream {
+.       &self.streams_@{streams[i]}[index].1
+.    }
+.
+    }
+    var max_events = $("crate oss os[name='linux']").attr("max_events");
+    if(max_events == undefined) {
+    //Default value
+        max_events = 30;
+    }
+.
+.pub fn wait(&mut self,initial_timeout:i32) ->Result<(),Error> {
+.        let mut timeout = initial_timeout;
+.        loop {
+.            println!("Wait looping");
+.            let mut events:[epoll_event_t;@{max_events}];
+.            let mut number_of_events;
+.            unsafe {
+.                events = std::mem::uninitialized();
+.                number_of_events = epoll_wait(self.fd,&mut events[0] as *mut epoll_event_t,@{max_events},timeout);
+.            }
+.            if number_of_events < 0 {
+.                let error = std::io::Error::last_os_error();
+.                let errno = error.raw_os_error().unwrap();
+.                if errno != 4  {
+.                     println!("Error Signal while waiting");
+.                    return Err(error)
+.                }
+.            println!("System Call Interruption");
+.            } else {
+.            println!("An event arrived");
+.            let current_time = get_time();
+.            while !self.timers.is_empty() {
+.                if self.timers[0].0.lt(&current_time) {
+.                    let fd = self.timers[0].1;
+.                    self.perform_callback(fd,&current_time);
+.                    self.timers.pop();
+.                } else {
+.                    break;
+.                } 
+.            }
+.            println!("number_of_events: {}",number_of_events);
+.            for i in 0..number_of_events {
+.                let fd = events[i as usize].data.fd;
+.                self.perform_callback(fd,&current_time);
+.            }
+.            self.timers.sort_by(|a,b| a.0.cmp(&b.0));
+.            if self.timers.is_empty() {
+.               timeout = -1; 
+.            } else {
+.                timeout = (self.timers[0].0-get_time()).num_milliseconds() as c_int;
+.                if timeout < 0 {
+.                    timeout = 0;
+.                }
+.            }
+.            }
 .        }
 .    }
 .
 .    fn perform_callback(&mut self,fd:c_int,current_time:&Timespec) {
-.        match self.streams.binary_search_by(|a| a.0.cmp(&fd)) {
-.            Ok(index) => {
-.            let callback = self.streams[index].2;
-.            let data = self.streams[index].3;
-.            let new_timeout = callback(self,index,data);
-.            if new_timeout >= 0 {
-.                self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
-.            }},
-.            Err(_) => {
-.            let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();
-.            let callback_ptr:*const fn(&mut Poll,usize,*mut i8)->c_int;
-.            let callback:& fn(&mut Poll,usize,*mut i8)->c_int;
-.            unsafe {
-.                callback_ptr = &mut self.channels[index].2;
-.                callback = transmute(callback_ptr);
+.            loop {
+    for(var i = 0; i <streams.length; i++) {
+.            match self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)) {
+.                Ok(index) => {
+.                let callback = self.streams_@{streams[i]}[index].2;
+.                let data = self.streams_@{streams[i]}[index].3;
+.                let new_timeout = callback(self,index,data);
+.                if new_timeout >= 0 {
+.                    self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+.                }
+.                break;
+.                },
+.                Err(_) => {}
 .            }
-.            let data = self.streams[index].3;
-.            let new_timeout = callback(self,index,data);
-.            if new_timeout >= 0 {
-.                self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
-.            }}
+    }
+    for(var i = 0; i <channels.length; i++) {
+.            match self.channels_@{channels[i][0]_@{channels[i][1]}}.binary_search_by(|a| a.0.cmp(&fd)) {
+.                Ok(index) => {
+.                let callback =self.channels_@{channels[i][0]}_@{channels[i][1]}[index].2;
+.                let data = self.channels_@{channels[0]}_@{channels[i][1]}[index].3;
+.                let new_timeout = callback(self,index,data);
+.                if new_timeout >= 0 {
+.                    self.timers.push((current_time.clone() +Duration::milliseconds(new_timeout as i64),fd));
+.                }
+.                break;
+.                },
+.                Err(_) => {}
+.            }
+    }
+.        assert!(true);
+.
 .        }
 .    }
 .
-.    pub fn create_channel(&mut self, callback: fn(&mut Poll,usize,*mut i8)->c_int,data:*mut i8) -> Result<PSender<i8>,Error> {
-.        let (sender,receiver) = pchannel();
-.        self.channels.push((sender.fd,receiver, callback,data));
-.        let no_error;
-.        unsafe {
-.            let mut epoll_event = epoll_event_t {events:0x001,data:epoll_data_t {fd:sender.fd, dummy:0}};
-.            no_error = epoll_ctl(self.fd,1,sender.fd, &mut epoll_event);
-.        }
-.        if no_error<0 {
-.            Err(std::io::Error::last_os_error())
-.        } else {
-.            self.channels.sort_by(|a,b| a.0.cmp(&b.0));
-.            Ok(sender)
+    for(var i = 0; i < channels.length; i++) {
+.    pub fn create_channel_@{channels[i][0]}_@{channels[i][1]}(&mut self, callback: fn(&mut Poll,usize,&mut @{channels[i][1]} )->c_int,data:mut @{channels[i][1]}) -> Result<PSender<@{channels[i][0]}>,Error> {
+.//Remove unwrap and return an error TODO
+.        let (sender,receiver) = pchannel().unwrap();
+.        self.channels_@{channels[i][0]}_@{channels[i][1]}.push((sender.fd,receiver, callback,data));
+.        loop {
+.            let no_error;
+.            unsafe {
+.                let mut epoll_event = epoll_event_t {events:0x001,data:epoll_data_t {fd:sender.fd, dummy:0}};
+.                no_error = epoll_ctl(self.fd,1,sender.fd, &mut epoll_event);
+.            }
+.            if no_error<0 {
+.                let error = std::io::Error::last_os_error();
+.                let errno = error.raw_os_error().unwrap();
+.                if errno != 4  {
+.                    println!("Create channel error");
+.                    return Err(error);
+.                }
+.            } else {
+.                self.channels_@{channels[i][0]}_@{channnels[i][1]}.sort_by(|a,b| a.0.cmp(&b.0));
+.                println!("Created channel");
+.                return Ok(sender);
+.            }
+.            }
+.    }
+.
+.    pub fn destroy_channel_@{channels[i][0]}_@{channels[i][1]}(&mut self, sender:PSender<@{channels[i][0]}>) ->Result<(),Error> {
+.        self.destroy_channel_@{channnels[i][0]}_@{channels[i][1]}_by_fd(sender.fd)
+.    }
+.    pub fn destroy_channel_@{channels[i][0]}_@{channels[i][1]}_by_fd(&mut self, fd:c_int) -> Result<(),Error> {
+.        loop {
+.            let index = self.channels_@{channels[i][0]}_@{channels[i][1]}.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
+.            let (_,receiver,callback,data) = self.channels_@{channels[i][0]}_@{channels[i][1]}.remove(index);
+.            let no_error;
+.            unsafe {
+.                let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
+.                no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
+.            }
+.            if no_error<0 {
+.                self.channels_@{channels[i][0]}_@{channels[i][1]}.push((fd,receiver,callback,data));
+.                self.channels_@{channels[i][0]}_@{channels[i][1]}.sort_by(|a,b| a.0.cmp(&b.0));
+.                let error = std::io::Error::last_os_error();
+.                let errno = error.raw_os_error().unwrap();
+.                if errno != 4  {
+.                    println!("Destroy channel error");
+.                    return Err(error);
+.                }
+.            } else {
+.                return Ok(());
+.            }
 .        }
 .    }
 .
-.    pub fn destroy_channel(&mut self, sender:PSender<i8>) ->Result<(),Error> {
-.        self.destroy_channel_by_fd(sender.fd)
-.    }
-.    fn destroy_channel_by_fd(&mut self, fd:c_int) -> Result<(),Error> {
-.        let index = self.channels.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
-.        let (_,receiver,callback,data) = self.channels.remove(index);
-.        let no_error;
-.        unsafe {
-.            let mut epoll_event = epoll_event_t {events:0,data:epoll_data_t {fd:0, dummy:0}};
-.            no_error = epoll_ctl(self.fd,2,fd,&mut epoll_event);
-.        }
-.        if no_error<0 {
-.            self.channels.push((fd,receiver,callback,data));
-.            self.channels.sort_by(|a,b| a.0.cmp(&b.0));
-.            Err(std::io::Error::last_os_error())
-.        } else {
-.            Ok(())
-.        }
-.    }
 .
-.
-.    pub fn borrow_channel(&self, index:usize) ->&PReceiver<i8> {
-.       &self.channels[index].1
+.    pub fn borrow_channel_@{channels[i][0]}_@{channels[i][1]}(&self, index:usize) ->&PReceiver<@{channels[i][0]}> {
+.       &self.channels_@{channels[i]}[index].1
 .    }
+    }
 .
 .}
 .
 .impl Drop for Poll {
 .
 .    fn drop(&mut self) {
+    for(var i = 0; i < streams.length; i++) {
 .        loop {
 .            let rfd:Option<c_int>;
-.            match self.streams.last() {
+.            match self.streams_@{streams[i]}.last() {
 .                None => rfd = None,
 .                Some(s) => rfd = Some(s.0)
 .            };
 .            match rfd {
 .                None => break,
 .                Some(fd) => { 
-.                    match self.detach_stream(fd) {
+.                    match self.detach_stream_@{streams[i]}_by_fd(fd) {
 .                        Ok(_) => (),
 .                        Err(_) => {
 .                            println!("Error: Poll Object could't be destroyed correctly");
@@ -357,16 +391,18 @@ max_events = 30;
 .                }
 .            }
 .        }
+    }
+    for(var i = 0; i < channels.length; i++) {
 .        loop {
 .            let rfd:Option<c_int>;
-.            match self.channels.last() {
+.            match self.channels_@{channels[i][0]}_@{channels[i][1]}.last() {
 .                None => rfd = None,
 .                Some(s) => rfd = Some(s.0)
 .            };
 .            match rfd {
 .                None => break,
 .                Some(fd) => { 
-.                    match self.destroy_channel_by_fd(fd) {
+.                    match self.destroy_channel_@{channels[i][0]}_@{channels[i][1]}_by_fd(fd) {
 .                        Ok(_) => (),
 .                        Err(_) => {
 .                            println!("Error: Poll Object could't be destroyed correctly");
@@ -376,11 +412,11 @@ max_events = 30;
 .                }
 .            }
 .        }
+    }
 .        unsafe {
 .            close(self.fd);
 .        }
 .    }
 .}
+    }
 }
-
-binding.generate();

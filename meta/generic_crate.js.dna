@@ -1,3 +1,100 @@
+function obtain_dependencies() {
+    
+    //Dependencies
+    var fs = require('fs');
+    var execSync = require('child_process').execSync;
+    var cheerio = require('cheerio');
+
+
+    var paths = [[[],"."]];
+    
+    while(paths.length > 0) {
+    
+        var path = paths.pop();
+    
+        //Open dependency xml.
+        var xml_file = fs.readFileSync(path[1] + "/crate.xml", {
+            encoding: "utf-8"
+        });
+        var $ = cheerio.load(xml_file, {
+            xmlMode: true
+        });
+
+//Point to current crate.
+.var lmeta = this["meta"];
+for( var i = 0; i < path[0].length; i++) {
+./+[@{path[0][i]}]["meta"]
+}
+        
+        $("dependencies dependency").each(function(){
+            var dep = { 
+                "name": $(this).attr("name"),
+                "version": $(this).attr("version"),
+                "git": $(this).attr("git"),
+                "path": $(this).attr("path"),
+                "meta": $(this).attr("meta"),
+                "meta_args": $(this).attr("meta_args")
+            };
+    
+            if((dep.git != undefined) &&(dep.path != undefined)) {
+                console.log("Error:Dependency has both a git and a path property");
+                process.exit(1);
+            }
+            if((dep.meta != undefined) &&(dep.git == undefined)) {
+                console.log("Error:Meta dependency doesn't have a git property");
+                process.exit(1);
+            }
+    
+            if(dep.meta == undefined) {
+.this.dependencies.push(@{JSON.stringify(dep)});
+            } else {
+    
+        //Download repository if needed
+                var tmp= dep.git.split("/");
+                var usr = tmp[tmp.length-2];
+                var prj = tmp[tmp.length-1].slice(0,-4);
+                try {
+                    fs.mkdirSync("./dependencies/"+usr); 
+                } catch (e) {
+                    if(e.code != "EEXIST") {
+                        process.exit(1);
+                    }
+                }
+                try {
+                    fs.mkdirSync("./dependencies/"+usr+"/"+prj);
+                    execSync("git clone " + dep.git + " ./dependencies/"+usr+"/"+prj);
+                } catch (e) {
+                    if(e.code != "EEXIST") {
+                        process.exit(1);
+                    }
+                }
+                paths.push([path.slice().push(dep.name),"./dependencies/"+usr+"/"+prj]);
+
+.{
+../exec("./dependencies/@{usr+'/'+prj}/meta/crate.js.dna",[meta])
+                if(meta_args in dep) {
+.lmeta["@{dep.name}"] = new @{dep.name}(true,@{meta_args});
+                } else {
+.lmeta["@{dep.name}"] = new @{dep.name}(true);
+                }
+.}
+            }
+        });
+    }
+}
+
+
+./!dots(1)
+
+
+function Crate(meta) {
+
+this.meta={};
+this.type =$("crate").attr("type");
+this.dependencies=[];
+this.generate_external_crate_prelude = generate_external_crate_prelude;
+
+
 //Dependencies
 var fs = require('fs');
 var cheerio = require('cheerio');
@@ -10,59 +107,78 @@ var $ = cheerio.load(xml_file, {
     xmlMode: true
 });
 
+
+function generate_dependencies() {
+
+    this.dependencies.forEach(function(dep){
+.@{name} = {
+        var properties = [];
+        if(dep.version != undefined) {
+            properties.push(' version = "'+dep.version+'"');
+        }
+        if(dep.git != undefined) {
+            properties.push(' git = "'+dep.git+'"');
+        }
+        if(dep.path != undefined) {
+            properties.push(' path = "'+dep.path+'"');
+        }
+./!separate(",")
+        for (var i = 0;i < properties.length; i++) {
+./+ @{properties[i]}
+        }
+
+./+ }
+
+    });
+.
+}
+
+function generate_cargo_toml() {
 ./!output("../Cargo.toml")
 .[package]
-$("info").each(function(){
-var name = $(this).attr("name");
-var version = $(this).attr("version");
+    $("info").each(function(){
+        var name = $(this).attr("name");
+        var version = $(this).attr("version");
 .name = "@{name}"
 .version = "@{version}"
 .authors = [
-var authors = [];
-$("authors author", this).each(function(){
-var name = $(this).attr("name");
-var  email = $(this).attr("email");
-authors.push([name,email]);
-});
+        var authors = [];
+        $("authors author", this).each(function(){
+            var name = $(this).attr("name");
+            var email = $(this).attr("email");
+            authors.push([name,email]);
+        });
 ./!separate(",")
-for (var i = 0; i<authors.length; i++) {
+        for (var i = 0; i<authors.length; i++) {
 ./+"@{authors[i][0]} <@{authors[i][1]}>" 
-}
-});
+        }
+    });
 ./+]
 
 //Dependencies
 .
 .[dependencies]
-var external_crate_names = [];
-var git_dependencies = [];
-$("dependencies dependency").each(function(){
-    var name = $(this).attr("name");
-    var version = $(this).attr("version");
-    var git = $(this).attr("git");
-if(git == undefined) {
-.@{name} = "@{version}"
-} else {
-    git_dependencies.push([name,git]);
-}
-external_crate_names.push(name);
-});
-
-.
-git_dependencies.forEach(function(each){
-.[dependencies.@{each[0]}]
-.git = "@{each[1]}"
-.
-});
+    generate_dependencies();
+};
 
 function generate_external_crate_prelude() {
-external_crate_names.forEach(function(each){
-.extern crate @{each};
-});
+    this.dependencies.forEach(function(each){
+        if(each.meta != true) {
+.extern crate @{each.name};
+        }
+    });
+}
+
+//Parts that will generate an output whenever the crate object is initialized.
+
+./!dots(-1)
+obtain_dependencies();
+./!dots(1)
+
+if(!meta) {
+    generate_cargo_toml();
 }
 
 
-
-//Check type of Crate
-var type_of_crate =$("crate").attr("type");
+}
 

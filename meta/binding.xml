@@ -13,7 +13,7 @@
                              An "_t" is added at the end. Opaque is the struct that doesn't 
                              have info about its internal memory structure. need_malloc is used
                              to show whether the struct itself needs allocation in rust.
-                             need_malloc is used to show whether the c struct has pointers that need deallocation as well.
+                             need_dealloc is used to show whether the c struct has pointers that need deallocation as well.
 			<object name="Loop" c_name="uv_loop" opaque="true" need_malloc="true" need_dealloc="true" nlifetimes="0"/>
 
 -->

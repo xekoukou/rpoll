@@ -11,6 +11,8 @@
 	<dependencies>
 		<dependency name="time" version = "0.1"/>
 		<dependency name="libc" version = "0.1"/>
+		<!--		<dependency name="libc" git="only github" meta="true" meta_args="arg1,arg2,arg3"/>
+				-->
 	</dependencies>	
 	<crate type= "binding">
 		<oss>
