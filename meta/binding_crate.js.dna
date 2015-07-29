@@ -3,8 +3,8 @@
 /*
 You need to create a new binding crate and then execute the generate function from the main dna file.
 */
-function Binding(meta) {
-    Crate.call(this,meta);
+function Binding(meta,path) {
+    Crate.call(this,meta,path);
     this.target_os = require('os').type();
     this.data_types = {};
     this.extern = {};
