@@ -1,7 +1,7 @@
 ./!include("./binding_crate.js.dna")
 
 ./!dots(-1)
-if(meta == true) {
+if(meta != true) {
  console.log("This is a meta package, it is not possible to build a library.");
  process.exit(1);
 }
