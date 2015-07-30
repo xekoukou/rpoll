@@ -12,7 +12,7 @@ var $ = cheerio.load(xml_file, {
 });
 
 var project_name = $("info").attr("name");
-this.project_type =$("crate").attr("type");
+var project_type =$("crate").attr("type");
 
 function obtain_dependencies() {
     
