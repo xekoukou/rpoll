@@ -4,7 +4,7 @@ var fs = require('fs');
 var cheerio = require('cheerio');
 
 //Get the name of the Project.
-var xml_file = fs.readFileSync(path[1] + "/crate.xml", {
+var xml_file = fs.readFileSync("./crate.xml", {
     encoding: "utf-8"
 });
 var $ = cheerio.load(xml_file, {
