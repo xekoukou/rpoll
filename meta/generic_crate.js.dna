@@ -12,6 +12,7 @@ var $ = cheerio.load(xml_file, {
 });
 
 var project_name = $("info").attr("name");
+this.project_type =$("crate").attr("type");
 
 function obtain_dependencies() {
     
@@ -75,7 +76,7 @@ for( var i = 0; i < path[0].length; i++) {
                 }
                 try {
                     fs.mkdirSync("./dependencies/"+usr+"/"+prj);
-                    execSync("git clone " + dep.git + " ./dependencies/"+usr+"/"+prj  + " 1>/dev/null");
+                    execSync("git clone " + dep.git + " ./dependencies/"+usr+"/"+prj  + " >/dev/null");
                 } catch (e) {
                     if(e.code != "EEXIST") {
                         process.exit(1);
@@ -124,7 +125,8 @@ function Crate(meta,path) {
         xmlMode: true
     });
     
-    this.type =$("crate").attr("type");
+    this.proejct_type =$("crate").attr("type");
+    this.project_name =$("info").attr("name");
     
     function generate_dependencies() {
     
@@ -200,7 +202,14 @@ function Crate(meta,path) {
         } catch(e){}
 ../!output("../src/@{project_name}/mod.rs")
     } else {
+        switch (project_type) {
+            case "binding": 
 ../!output("../src/lib.rs")
+                break;
+            case "executable":
+../!output("../src/main.rs")
+                break; 
+        }
     }
 ./!dots(1)
     
