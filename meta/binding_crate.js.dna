@@ -10,7 +10,6 @@ function Binding(meta,path) {
     this.extern = {};
     this.language = $("binding").attr("language");
     this.generate = generate;
-    this.output= "../src/lib.rs";
 
 //TODO the object part of the binding model needs rethinking. 
     this.objects;
@@ -25,9 +24,6 @@ function Binding(meta,path) {
     });
     
     function generate() {
-    
-    //Define the output
-./!output(@{this.output})
     
     this.generate_external_crate_prelude();
     

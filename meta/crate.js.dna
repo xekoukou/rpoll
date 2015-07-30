@@ -10,10 +10,6 @@ if(meta != true) {
 function RPoll(meta,path) {
     Binding.call(this,meta);
     
-    if(meta) {
-        this.output = "../src/rpoll.rs";
-    }
-
     this.data_types.epoll = function() {
 
 .use libc::{c_void,ssize_t,c_int,c_uint,uint32_t,size_t};
@@ -110,7 +106,6 @@ function RPoll(meta,path) {
     }
 
 this.poll = function(streams,channels) {
-./!output("@{this.output}")
 .
 .pub struct Poll {
 .    fd: c_int,

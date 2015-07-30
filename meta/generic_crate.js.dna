@@ -1,11 +1,22 @@
 var meta = (process.argv[2] == "meta");
 
+var fs = require('fs');
+var cheerio = require('cheerio');
+
+//Get the name of the Project.
+var xml_file = fs.readFileSync(path[1] + "/crate.xml", {
+    encoding: "utf-8"
+});
+var $ = cheerio.load(xml_file, {
+    xmlMode: true
+});
+
+var project_name = $("info").attr("name");
+
 function obtain_dependencies() {
     
     //Dependencies
-    var fs = require('fs');
     var execSync = require('child_process').execSync;
-    var cheerio = require('cheerio');
 
 
     var paths = [[[],"."]];
@@ -23,9 +34,9 @@ function obtain_dependencies() {
         });
 
 //Point to current crate.
-.var lmeta = this["meta"];
+.var lmeta = this["mcrates"];
 for( var i = 0; i < path[0].length; i++) {
-./+[@{path[0][i]}]["meta"]
+./+[@{path[0][i]}]["mcrates"]
 }
         
         $("dependencies dependency").each(function(){
@@ -91,103 +102,111 @@ for( var i = 0; i < path[0].length; i++) {
 
 function Crate(meta,path) {
 
-this.path = "";
-if( path != undefined) {
-    this.path = path;
-}
-
-this.meta={};
-this.dependencies=[];
-this.generate_external_crate_prelude = generate_external_crate_prelude;
-
-
-//Dependencies
-var fs = require('fs');
-var cheerio = require('cheerio');
-
-//Open main project xml.
-var xml_file = fs.readFileSync(path + "./crate.xml", {
-    encoding: "utf-8"
-});
-var $ = cheerio.load(xml_file, {
-    xmlMode: true
-});
-
-this.type =$("crate").attr("type");
-
-function generate_dependencies() {
-
-    this.dependencies.forEach(function(dep){
-.@{name} = {
-        var properties = [];
-        if(dep.version != undefined) {
-            properties.push(' version = "'+dep.version+'"');
-        }
-        if(dep.git != undefined) {
-            properties.push(' git = "'+dep.git+'"');
-        }
-        if(dep.path != undefined) {
-            properties.push(' path = "'+dep.path+'"');
-        }
-./!separate(",")
-        for (var i = 0;i < properties.length; i++) {
-./+ @{properties[i]}
-        }
-
-./+ }
-
+    this.path = "";
+    if( path != undefined) {
+        this.path = path;
+    }
+    this.meta = meta;
+    this.mcrates={};
+    this.dependencies=[];
+    this.generate_external_crate_prelude = generate_external_crate_prelude;
+    
+    
+    //Dependencies
+    var fs = require('fs');
+    var cheerio = require('cheerio');
+    
+    //Open main project xml.
+    var xml_file = fs.readFileSync(path + "./crate.xml", {
+        encoding: "utf-8"
     });
+    var $ = cheerio.load(xml_file, {
+        xmlMode: true
+    });
+    
+    this.type =$("crate").attr("type");
+    
+    function generate_dependencies() {
+    
+        this.dependencies.forEach(function(dep){
+.@{name} = {
+            var properties = [];
+            if(dep.version != undefined) {
+                properties.push(' version = "'+dep.version+'"');
+            }
+            if(dep.git != undefined) {
+                properties.push(' git = "'+dep.git+'"');
+            }
+            if(dep.path != undefined) {
+                properties.push(' path = "'+dep.path+'"');
+            }
+./!separate(",")
+            for (var i = 0;i < properties.length; i++) {
+./+ @{properties[i]}
+            }
+    
+./+ }
+    
+        });
 .
-}
-
-function generate_cargo_toml() {
+    }
+    
+    function generate_cargo_toml() {
 ./!output("../Cargo.toml")
 .[package]
-    $("info").each(function(){
-        var name = $(this).attr("name");
-        var version = $(this).attr("version");
+        $("info").each(function(){
+            var name = $(this).attr("name");
+            var version = $(this).attr("version");
 .name = "@{name}"
 .version = "@{version}"
 .authors = [
-        var authors = [];
-        $("authors author", this).each(function(){
-            var name = $(this).attr("name");
-            var email = $(this).attr("email");
-            authors.push([name,email]);
-        });
+            var authors = [];
+            $("authors author", this).each(function(){
+                var name = $(this).attr("name");
+                var email = $(this).attr("email");
+                authors.push([name,email]);
+            });
 ./!separate(",")
-        for (var i = 0; i<authors.length; i++) {
+            for (var i = 0; i<authors.length; i++) {
 ./+"@{authors[i][0]} <@{authors[i][1]}>" 
-        }
-    });
+            }
+        });
 ./+]
-
-//Dependencies
+    
+    //Dependencies
 .
 .[dependencies]
-    generate_dependencies();
-};
-
-function generate_external_crate_prelude() {
-    this.dependencies.forEach(function(each){
-        if(each.meta != true) {
+        generate_dependencies();
+    };
+    
+    function generate_external_crate_prelude() {
+        this.dependencies.forEach(function(each){
+            if(each.meta != true) {
 .extern crate @{each.name};
-        }
-    });
-}
-
-//Parts that will generate an output whenever the crate object is initialized.
-
+            }
+        });
+    }
+    
+    //Parts that will generate an output whenever the crate object is initialized.
+    
 ./!dots(-1)
-if(!meta) {
-    obtain_dependencies();
-}
+    if(!meta) {
+        obtain_dependencies();
+    }
+    
+    if(meta) {
+        try {
+            fs.mkdirSync("../src/"+project_name);
+        } catch(e){}
+../!output("../src/@{project_name}/mod.rs")
+    } else {
+../!output("../src/lib.rs")
+    }
 ./!dots(1)
-
-if(!meta) {
-    generate_cargo_toml();
-}
-
+    
+    if(!meta) {
+        generate_cargo_toml();
+    }
 
 }
 
