@@ -75,7 +75,7 @@ for( var i = 0; i < path[0].length; i++) {
                 }
                 try {
                     fs.mkdirSync("./dependencies/"+usr+"/"+prj);
-                    execSync("git clone " + dep.git + " ./dependencies/"+usr+"/"+prj);
+                    execSync("git clone " + dep.git + " ./dependencies/"+usr+"/"+prj i + " 1>/dev/null");
                 } catch (e) {
                     if(e.code != "EEXIST") {
                         process.exit(1);
