@@ -1,5 +1,6 @@
 ./!include("./binding_crate.js.dna")
 
+//TODO This executes after obtain_dependencies is executed.
 ./!dots(-1)
 if(meta != true) {
  console.log("This is a meta package, it is not possible to build a library.");
@@ -7,8 +8,8 @@ if(meta != true) {
 }
 ./!dots(1)
 
-function RPoll(meta,path) {
-    Binding.call(this,meta);
+function RPoll(path) {
+    Binding.call(this,path);
     
     this.data_types.epoll = function() {
 
