@@ -1,7 +1,7 @@
 <root>
 	<binding language="c">
 		<external_libraries>
-			<library name="epoll" target_os="linux"/>
+			<library name="epoll" target_os="Linux"/>
 			<!--
 			  <library name="epoll" link="something" target_os="linux"/>
 					-->
