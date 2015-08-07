@@ -41,9 +41,17 @@ function RPoll(path) {
 .fn write(fd:c_int,buf: *const c_void, count:size_t) -> ssize_t;
     }
 
-    binding.generate();
+    this.generate();
 
     if(this.target_os == "linux") {
+
+./!dots(-1)
+        if(meta) {
+../!append("../src/@{project_name}/mod.rs")
+        } else {
+../!append("../src/lib.rs")
+        }
+./!dots(1)
 
 .
 .use std::net::TcpStream;
@@ -107,6 +115,15 @@ function RPoll(path) {
     }
 
 this.poll = function(streams,channels) {
+
+./!dots(-1)
+        if(meta) {
+../!append("../src/@{project_name}/mod.rs")
+        } else {
+../!append("../src/lib.rs")
+        }
+./!dots(1)
+
 .
 .pub struct Poll {
 .    fd: c_int,
@@ -140,7 +157,7 @@ this.poll = function(streams,channels) {
 ./+ streams_@{streams[i]}:Vec:new(),
     } 
     for(var i = 0; i <channels.length; i++) {
-./+ channels_@{channels[i][0]_@{channels[1]}}:Vec::new(),
+./+ channels_@{channels[i][0]}_@{channels[i][1]}:Vec::new(),
     }
 ./+ timers:Vec::new()})
 .        }
@@ -177,7 +194,7 @@ this.poll = function(streams,channels) {
 .    }
 .
 .pub fn detach_stream_@{streams[i]}_by_fd(&mut self,fd:i32) -> Result<TcpStream,Error> {
-.        self.detach_stream_@{stream[i]}(fd)
+.        self.detach_stream_@{streams[i]}(fd)
 .    }
 .
 .pub fn detach_stream_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
@@ -185,7 +202,7 @@ this.poll = function(streams,channels) {
 .        self.detach_stream_@{streams[i]}(fd)
 .    }
 .
-.fn detach_stream_@{stream[i]}(&mut self,fd:i32) -> Result<TcpStream,Error> {
+.fn detach_stream_@{streams[i]}(&mut self,fd:i32) -> Result<TcpStream,Error> {
 .    loop {
 .        let index = self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
 .        let (_,stream,callback,data) = self.streams_@{streams[i]}.remove(index);
@@ -285,7 +302,7 @@ this.poll = function(streams,channels) {
 .            }
     }
     for(var i = 0; i <channels.length; i++) {
-.            match self.channels_@{channels[i][0]_@{channels[i][1]}}.binary_search_by(|a| a.0.cmp(&fd)) {
+.            match self.channels_@{channels[i][0]}_@{channels[i][1]}.binary_search_by(|a| a.0.cmp(&fd)) {
 .                Ok(index) => {
 .                let callback =self.channels_@{channels[i][0]}_@{channels[i][1]}[index].2;
 .                let data = self.channels_@{channels[0]}_@{channels[i][1]}[index].3;
@@ -322,7 +339,7 @@ this.poll = function(streams,channels) {
 .                    return Err(error);
 .                }
 .            } else {
-.                self.channels_@{channels[i][0]}_@{channnels[i][1]}.sort_by(|a,b| a.0.cmp(&b.0));
+.                self.channels_@{channels[i][0]}_@{channels[i][1]}.sort_by(|a,b| a.0.cmp(&b.0));
 .                println!("Created channel");
 .                return Ok(sender);
 .            }
@@ -330,7 +347,7 @@ this.poll = function(streams,channels) {
 .    }
 .
 .    pub fn destroy_channel_@{channels[i][0]}_@{channels[i][1]}(&mut self, sender:PSender<@{channels[i][0]}>) ->Result<(),Error> {
-.        self.destroy_channel_@{channnels[i][0]}_@{channels[i][1]}_by_fd(sender.fd)
+.        self.destroy_channel_@{channels[i][0]}_@{channels[i][1]}_by_fd(sender.fd)
 .    }
 .    pub fn destroy_channel_@{channels[i][0]}_@{channels[i][1]}_by_fd(&mut self, fd:c_int) -> Result<(),Error> {
 .        loop {

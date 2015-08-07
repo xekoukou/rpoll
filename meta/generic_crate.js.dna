@@ -3,6 +3,7 @@ var meta_str = meta ? "true" : "false";
 
 var fs = require('fs');
 var cheerio = require('cheerio');
+var execSync = require('child_process').execSync;
 
 //Get the name of the Project.
 var xml_file = fs.readFileSync("./crate.xml", {
@@ -17,8 +18,6 @@ var project_type =$("crate").attr("type");
 
 function obtain_dependencies() {
     
-    //Dependencies
-    var execSync = require('child_process').execSync;
 
 
     var paths = [[[],"."]];
@@ -85,14 +84,14 @@ for( var i = 0; i < path[0].length; i++) {
                 }
                 paths.push([path.slice().push(dep.name),"./dependencies/"+usr+"/"+prj+"/meta"]);
 
-.{
+.(function(){
 ../!exec("./dependencies/@{usr+'/'+prj}/meta/crate.js.dna",[meta])
                 if(dep.meta_args != undefined) {
-.lmeta["@{dep.name}"] = new @{dep.name}(true,"./dependencies/@{usr+'/'+prj}/meta",@{dep.meta_args});
+.lmeta["@{dep.name}"] = new @{dep.name}("./dependencies/@{usr+'/'+prj}/meta",@{dep.meta_args});
                 } else {
-.lmeta["@{dep.name}"] = new @{dep.name}(true,"./dependencies/@{usr+'/'+prj}/meta");
+.lmeta["@{dep.name}"] = new @{dep.name}("./dependencies/@{usr+'/'+prj}/meta");
                 }
-.}
+.})();
             }
         });
     }
@@ -101,10 +100,12 @@ for( var i = 0; i < path[0].length; i++) {
 
 ./!dots(1)
 
+var fs = require('fs');
+var cheerio = require('cheerio');
 
 function Crate(path) {
 
-    this.path = "";
+    this.path = ".";
     if( path != undefined) {
         this.path = path;
     }
@@ -113,25 +114,23 @@ function Crate(path) {
     this.generate_external_crate_prelude = generate_external_crate_prelude;
     
     
-    //Dependencies
-    var fs = require('fs');
-    var cheerio = require('cheerio');
-    
     //Open main project xml.
-    var xml_file = fs.readFileSync(path + "./crate.xml", {
+    var xml_file = fs.readFileSync(this.path + "/crate.xml", {
         encoding: "utf-8"
     });
     var $ = cheerio.load(xml_file, {
         xmlMode: true
     });
+
+    var execSync = require('child_process').execSync;
     
-    this.proejct_type =$("crate").attr("type");
+    this.project_type =$("crate").attr("type");
     this.project_name =$("info").attr("name");
     
-    function generate_dependencies() {
+    function generate_dependencies(dependencies) {
     
-        this.dependencies.forEach(function(dep){
-.@{name} = {
+        dependencies.forEach(function(dep){
+.@{dep.name} = {
             var properties = [];
             if(dep.version != undefined) {
                 properties.push(' version = "'+dep.version+'"');
@@ -153,7 +152,7 @@ function Crate(path) {
 .
     }
     
-    function generate_cargo_toml() {
+    function generate_cargo_toml(dependencies) {
 ./!output("../Cargo.toml")
 .[package]
         $("info").each(function(){
@@ -178,7 +177,7 @@ function Crate(path) {
     //Dependencies
 .
 .[dependencies]
-        generate_dependencies();
+        generate_dependencies(dependencies);
     };
     
     function generate_external_crate_prelude() {
@@ -192,29 +191,36 @@ function Crate(path) {
     //Parts that will generate an output whenever the crate object is initialized.
     
 ./!dots(-1)
-    if(!meta) {
-        obtain_dependencies();
+if(!meta) {
+    obtain_dependencies();
+}
+
+if(!meta) {
+.    generate_cargo_toml(this.dependencies);
+}
+
+//We remove those files because we want to use append. Eacha meta function needs to specify the append location. This way each meta function can be multiplexed with other functions that write to different files.
+
+if(meta) {
+.    execSync("rm -Rf "+"../src/@{project_name}", {stdio:['ignore','ignore','ignore']});
+.    try {
+.        fs.mkdirSync("../src/@{project_name}");
+.    } catch(e){}
+} else {
+    switch (project_type) {
+        case "binding": 
+.    try {
+.        fs.unlinkSync("../src/lib.rs"); 
+.    }catch(e) {}
+            break;
+        case "executable":
+.    try {
+.        fs.unlinkSync("../src/main.rs"); 
+.    } catch(e) {}
+            break; 
     }
-    //Default values 
-    if(meta) {
-        try {
-            fs.mkdirSync("../src/"+project_name);
-        } catch(e){}
-../!output("../src/@{project_name}/mod.rs")
-    } else {
-        switch (project_type) {
-            case "binding": 
-../!output("../src/lib.rs")
-                break;
-            case "executable":
-../!output("../src/main.rs")
-                break; 
-        }
-    }
+}
     
-.    if(@{meta_str}) {
-.        generate_cargo_toml();
-.    }
 ./!dots(1)
 
 }

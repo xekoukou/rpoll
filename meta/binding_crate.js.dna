@@ -8,43 +8,57 @@ function Binding(path) {
     this.target_os = require('os').type();
     this.data_types = {};
     this.extern = {};
-    this.language = $("binding").attr("language");
-    this.generate = generate;
+    this.language;
+    this.generate;
 
 //TODO the object part of the binding model needs rethinking. 
     this.objects;
     this.object_uses;
     
     //Open the binding xml file.
-    var xml_file = fs.readFileSync("./binding.xml", {
+    var xml_file = fs.readFileSync(this.path + "/binding.xml", {
         encoding: "utf-8"
     });
     var $ = cheerio.load(xml_file, {
         xmlMode: true
     });
+
+    this.language = $("binding").attr("language");
     
-    function generate() {
+    this.generate = function generate() {
+
+./!dots(-1)
+        if(meta) {
+../!append("../src/@{project_name}/mod.rs")
+        } else {
+../!append("../src/lib.rs")
+        }
+./!dots(1)
+
     
     this.generate_external_crate_prelude();
-    
+
+    var this_target_os = this.target_os;
+    var this_data_types = this.data_types;
+    var this_extern = this.extern;
     $("binding external_libraries library").each(function(){
     
         var lib_name = $(this).attr("name");
         var link_name = $(this).attr("link");
         var target_os = $(this).attr("target_os");
-        if(target_os == this.target_os) {
+        if(target_os == this_target_os) {
             if(link_name != undefined){
 .
 .#[link(name = "@{link_name}")]
             }
 .
-            if(lib_name in data_types) {
-                this.data_types[lib_name]();
+            if(lib_name in this_data_types) {
+                this_data_types[lib_name]();
             }
     
 .extern {
 .
-            this.extern[lib_name]();
+            this_extern[lib_name]();
 .}
         }
     });
