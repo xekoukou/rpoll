@@ -43,16 +43,16 @@ function RPoll(path) {
 
     this.generate();
 
-    if(this.target_os == "linux") {
 
 ./!dots(-1)
-        if(meta) {
+if(meta) {
 ../!append("../src/@{project_name}/mod.rs")
-        } else {
+} else {
 ../!append("../src/lib.rs")
-        }
+}
 ./!dots(1)
 
+    if(this.target_os == "Linux") {
 .
 .use std::net::TcpStream;
 .use std::io::Error;
@@ -116,6 +116,7 @@ function RPoll(path) {
 
 this.poll = function(streams,channels) {
 
+    if(this.target_os == "Linux") {
 ./!dots(-1)
         if(meta) {
 ../!append("../src/@{project_name}/mod.rs")
@@ -127,12 +128,12 @@ this.poll = function(streams,channels) {
 .
 .pub struct Poll {
 .    fd: c_int,
-    for(var i = 0; i <streams.length; i++) {
+        for(var i = 0; i <streams.length; i++) {
 .    streams_@{streams[i]}: Vec<(c_int,TcpStream,fn(&mut Poll,usize,&mut @{streams[i]})->c_int,mut @{streams[i]})>,
-    }
-    for(var i = 0; i < channels.length; i++) {
+        }
+        for(var i = 0; i < channels.length; i++) {
 .    channels_@{channels[i][0]}_@{channels[i][1]}: Vec<(c_int,PReceiver<@{channels[i][0]}>,fn(&mut Poll,usize,&mut @{channels[i][1]})->c_int,mut @{channels[i][1]})>,
-    }
+        }
 .    timers: Vec<(Timespec,c_int)>
 .}
 .
@@ -153,17 +154,17 @@ this.poll = function(streams,channels) {
 .            Err(std::io::Error::last_os_error())
 .        } else {
 .        Ok(Poll {fd:fd,
-    for(var i = 0; i <streams.length; i++) {
+        for(var i = 0; i <streams.length; i++) {
 ./+ streams_@{streams[i]}:Vec:new(),
-    } 
-    for(var i = 0; i <channels.length; i++) {
+        } 
+        for(var i = 0; i <channels.length; i++) {
 ./+ channels_@{channels[i][0]}_@{channels[i][1]}:Vec::new(),
-    }
+        }
 ./+ timers:Vec::new()})
 .        }
 .    }
 .
-    for(var i = 0; i <streams.length; i++) {
+        for(var i = 0; i <streams.length; i++) {
 .pub fn attach_stream_@{streams[i]}(&mut self,stream:TcpStream,event:PollEvent,callback: fn(&mut Poll,usize,&mut @{streams[i]})->i32,data: mut @{streams[i]}) -> Result<i32,Error> {
 .       let fd = stream.as_raw_fd();
 .       match self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)) {
@@ -230,12 +231,12 @@ this.poll = function(streams,channels) {
 .       &self.streams_@{streams[i]}[index].1
 .    }
 .
-    }
-    var max_events = $("crate oss os[name='linux']").attr("max_events");
-    if(max_events == undefined) {
-    //Default value
-        max_events = 30;
-    }
+        }
+        var max_events = $("crate oss os[name='linux']").attr("max_events");
+        if(max_events == undefined) {
+        //Default value
+            max_events = 30;
+        }
 .
 .pub fn wait(&mut self,initial_timeout:i32) ->Result<(),Error> {
 .        let mut timeout = initial_timeout;
@@ -287,7 +288,7 @@ this.poll = function(streams,channels) {
 .
 .    fn perform_callback(&mut self,fd:c_int,current_time:&Timespec) {
 .            loop {
-    for(var i = 0; i <streams.length; i++) {
+        for(var i = 0; i <streams.length; i++) {
 .            match self.streams_@{streams[i]}.binary_search_by(|a| a.0.cmp(&fd)) {
 .                Ok(index) => {
 .                let callback = self.streams_@{streams[i]}[index].2;
@@ -300,8 +301,8 @@ this.poll = function(streams,channels) {
 .                },
 .                Err(_) => {}
 .            }
-    }
-    for(var i = 0; i <channels.length; i++) {
+        }
+        for(var i = 0; i <channels.length; i++) {
 .            match self.channels_@{channels[i][0]}_@{channels[i][1]}.binary_search_by(|a| a.0.cmp(&fd)) {
 .                Ok(index) => {
 .                let callback =self.channels_@{channels[i][0]}_@{channels[i][1]}[index].2;
@@ -314,13 +315,13 @@ this.poll = function(streams,channels) {
 .                },
 .                Err(_) => {}
 .            }
-    }
+        }
 .        assert!(true);
 .
 .        }
 .    }
 .
-    for(var i = 0; i < channels.length; i++) {
+        for(var i = 0; i < channels.length; i++) {
 .    pub fn create_channel_@{channels[i][0]}_@{channels[i][1]}(&mut self, callback: fn(&mut Poll,usize,&mut @{channels[i][1]} )->c_int,data:mut @{channels[i][1]}) -> Result<PSender<@{channels[i][0]}>,Error> {
 .//Remove unwrap and return an error TODO
 .        let (sender,receiver) = pchannel().unwrap();
@@ -377,14 +378,14 @@ this.poll = function(streams,channels) {
 .    pub fn borrow_channel_@{channels[i][0]}_@{channels[i][1]}(&self, index:usize) ->&PReceiver<@{channels[i][0]}> {
 .       &self.channels_@{channels[i]}[index].1
 .    }
-    }
+        }
 .
 .}
 .
 .impl Drop for Poll {
 .
 .    fn drop(&mut self) {
-    for(var i = 0; i < streams.length; i++) {
+        for(var i = 0; i < streams.length; i++) {
 .        loop {
 .            let rfd:Option<c_int>;
 .            match self.streams_@{streams[i]}.last() {
@@ -404,8 +405,8 @@ this.poll = function(streams,channels) {
 .                }
 .            }
 .        }
-    }
-    for(var i = 0; i < channels.length; i++) {
+        }
+        for(var i = 0; i < channels.length; i++) {
 .        loop {
 .            let rfd:Option<c_int>;
 .            match self.channels_@{channels[i][0]}_@{channels[i][1]}.last() {
@@ -425,11 +426,12 @@ this.poll = function(streams,channels) {
 .                }
 .            }
 .        }
-    }
+        }
 .        unsafe {
 .            close(self.fd);
 .        }
 .    }
 .}
+        }
     }
 }
