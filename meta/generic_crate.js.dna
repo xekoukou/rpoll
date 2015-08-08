@@ -135,24 +135,25 @@ function Crate(path) {
     function generate_dependencies(dependencies) {
     
         dependencies.forEach(function(dep){
+            if(dep.meta != undefined) {
 .@{dep.name} = {
-            var properties = [];
-            if(dep.version != undefined) {
-                properties.push(' version = "'+dep.version+'"');
-            }
-            if(dep.git != undefined) {
-                properties.push(' git = "'+dep.git+'"');
-            }
-            if(dep.path != undefined) {
-                properties.push(' path = "'+dep.path+'"');
-            }
+                var properties = [];
+                if(dep.version != undefined) {
+                    properties.push(' version = "'+dep.version+'"');
+                }
+                if(dep.git != undefined) {
+                    properties.push(' git = "'+dep.git+'"');
+                }
+                if(dep.path != undefined) {
+                    properties.push(' path = "'+dep.path+'"');
+                }
 ./!separate(",")
-            for (var i = 0;i < properties.length; i++) {
+                for (var i = 0;i < properties.length; i++) {
 ./+ @{properties[i]}
-            }
-    
+                }
+        
 ./+ }
-    
+            }
         });
 .
     }
