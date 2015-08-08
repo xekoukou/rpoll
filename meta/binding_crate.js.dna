@@ -36,7 +36,7 @@ function Binding(path) {
 ./!dots(1)
 
     
-    this.generate_external_crate_prelude();
+    this.generate_prelude();
 
     var this_target_os = this.target_os;
     var this_data_types = this.data_types;

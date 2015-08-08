@@ -116,7 +116,7 @@ function Crate(path) {
     }
     this.mcrates={};
     this.dependencies=[];
-    this.generate_external_crate_prelude = generate_external_crate_prelude;
+    this.generate_prelude = generate_prelude;
     
     
     //Open main project xml.
@@ -186,7 +186,7 @@ function Crate(path) {
         generate_dependencies(dependencies);
     };
     
-    function generate_external_crate_prelude() {
+    function generate_prelude() {
         this.dependencies.forEach(function(each){
             if(each.meta != true) {
 .extern crate @{each.name};
