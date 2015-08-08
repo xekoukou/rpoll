@@ -35,10 +35,16 @@ function obtain_dependencies() {
         });
 
 //Point to current crate.
-.var lmeta = this["mcrates"];
+.var lmeta = this["mcrates"]
 for( var i = 0; i < path[0].length; i++) {
 ./+[@{path[0][i]}]["mcrates"]
 }
+./+;
+.var ldep = this
+for( var i = 0; i < path[0].length; i++) {
+./+["mcrates"][@{path[0][i]}]
+}
+./+.dependencies;
         
         $("dependencies dependency").each(function(){
             var dep = { 
@@ -59,9 +65,8 @@ for( var i = 0; i < path[0].length; i++) {
                 process.exit(1);
             }
     
-            if(dep.meta == undefined) {
-.this.dependencies.push(@{JSON.stringify(dep)});
-            } else {
+.ldep.push(@{JSON.stringify(dep)});
+            if(dep.meta != undefined) {
     
         //Download repository if needed
                 var tmp= dep.git.split("/");
@@ -184,6 +189,8 @@ function Crate(path) {
         this.dependencies.forEach(function(each){
             if(each.meta != true) {
 .extern crate @{each.name};
+            } else {
+.mod @{each.name};
             }
         });
     }
