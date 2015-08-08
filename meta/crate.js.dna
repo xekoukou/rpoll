@@ -224,7 +224,7 @@ this.poll = function(streams,channels) {
 .            let index = self.streams_@{streams[i][1]}.binary_search_by(|a| a.0.cmp(&fd)).unwrap();     
             if(streams[i][0] =="None") {
 .            let (_,stream,callback) = self.streams_@{streams[i][1]}.remove(index);
-            else {
+            } else {
 .            let (_,stream,callback,data) = self.streams_@{streams[i][1]}.remove(index);
             }
 .            let no_error;
