@@ -337,7 +337,7 @@ this.poll = function(streams,channels) {
             if(channels[i][1] == "None") {
 .                let callback =self.channels_@{channels[i][2]}[index].2;
 .                let new_timeout = callback(self,index);
-            else {
+            } else {
 .                let callback =self.channels_@{channels[i][2]}[index].2;
 .                let data = self.channels_@{channels[2]}[index].3;
 .                let new_timeout = callback(self,index,data);
