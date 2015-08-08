@@ -135,7 +135,7 @@ function Crate(path) {
     function generate_dependencies(dependencies) {
     
         dependencies.forEach(function(dep){
-            if(dep.meta != undefined) {
+            if(dep.meta == undefined) {
 .@{dep.name} = {
                 var properties = [];
                 if(dep.version != undefined) {
