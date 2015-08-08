@@ -214,7 +214,7 @@ this.poll = function(streams,channels) {
 .            self.detach_@{streams[i][1]}_stream(fd)
 .        }
 .    
-.    pub fn detach_stream_@{streams[i][1]}_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
+.    pub fn detach_@{streams[i][1]}_stream_by_index(&mut self,index:usize) -> Result<TcpStream,Error> {
 .            let fd = self.streams_@{streams[i][1]}[index].0;
 .            self.detach_@{streams[i][1]}_stream(fd)
 .        }
