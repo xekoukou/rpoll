@@ -188,7 +188,7 @@ function Crate(path) {
     
     function generate_prelude() {
         this.dependencies.forEach(function(each){
-            if(each.meta != true) {
+            if(each.meta == undefined) {
 .extern crate @{each.name};
             } else {
 .mod @{each.name};
